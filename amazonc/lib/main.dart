@@ -20,7 +20,6 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:file_picker/file_picker.dart';
 
 void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
@@ -58,7 +57,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   TextEditingController urlInputController;
   TextEditingController noInputController;
 
-  var lists = List<CrawlItem>.generate(3, (i) => CrawlItem("$i", "hehe_$i"));
+  var lists = List<CrawlItem>();
 
 
   @override
@@ -73,6 +72,57 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     urlInputController.dispose();
     noInputController.dispose();
     super.dispose();
+  }
+
+  crawling(CrawlItem item) async {
+    print("===== crawling start =====");
+    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
+    List<String> urls;
+
+    print("= url : " + url);
+    await http.read(url).then((contents) {
+      print("= url fetched =");
+      urls = inspect2(contents);
+      print("= content parsed =");
+    });
+    print("= image count : ${urls != null ? urls.length : 0}");
+
+    await downloadAll(item, urls);
+
+    setState(() {
+      item.isCrawl = true;
+    });
+    print("===== crawling end =====");
+  }
+
+  downloadAll(CrawlItem item, List<String> urls) async {
+    print("= download start =");
+    String prefix = '/Users/snailoff/workspace/flutter/works_amazonc/temp/';
+    await new Directory(prefix + item.no).create().then((Directory dir) async {
+      for(var i=0; i<urls.length; i++){
+        await download(urls[i], '${dir.path}/${item.no}-${i+1}.jpg');
+      }
+    });
+    print("= download end =");
+  }
+
+  download(url, savefile) async {
+    await http.get(url).then((response) {
+      new File(savefile).writeAsBytes(response.bodyBytes);
+      print('downloaded - ' + savefile);
+    });
+  }
+
+  List<String> inspect2(String site_code){
+//    RegExp exp = new RegExp(r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)");
+    List<String> rs = List<String>();
+    RegExp exp = new RegExp(r'"hiRes":"(.*?)"', multiLine: true);
+    var matches = exp.allMatches(site_code);
+    for(Match match in matches) {
+      rs.add(match[1]);
+    }
+
+    return rs;
   }
 
   @override
@@ -112,10 +162,6 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                   ButtonBar(
                     mainAxisSize: MainAxisSize.max,
                     children: [
-                      new RaisedButton(onPressed: () async {
-                        await FilePicker.getFilePath(type: FileType.IMAGE, fileExtension: "*xlsx");
-
-                      }),
                       new RaisedButton(
                         child: const Text('Clear'),
                         onPressed: () {
@@ -125,18 +171,15 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                       new RaisedButton(
                         child: const Text('Image Crawl'),
                         onPressed: () async {
-                          print("go!!!!!!!!");
-                          var c = CrawlItem(noInputController.text, urlInputController.text);
-                          var cr = Crawler(c);
-                          cr.urlContent();
+                          var item = CrawlItem(noInputController.text, urlInputController.text);
 
+                          // 관리번호로 검색하여 상태업데이트하는 메서드 필요.
                           setState(() {
                             lists = List<CrawlItem>();
-                            lists.add(c);
-                            cr.imageCrawl();
-                            c.isCrawl = true;
+                            lists.add(item);
                           });
 
+                          await crawling(item);
 
 //                            return showDialog(
 //                              context: context,
@@ -222,36 +265,6 @@ class Crawler {
   List<String> urls;
   String content;
 
-  urlContent() {
-    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
-    http.read(url).then((contents) {
-      print("crawling --> " + url);
-      urls = inspect2(contents);
-      for(var url in urls){
-        print("images : " + url);
-      }
-
-      downloadAll();
-    });
-
-  }
-
-  downloadAll(){
-    String prefix = '/Users/snailoff/workspace/flutter/works_amazonc/temp/';
-    new Directory(prefix + item.no).create().then((Directory dir) {
-      for(var i=0; i<urls.length; i++){
-        print('${dir.path}/${item.no}-${i+1}.jpg');
-        download(urls[i], '${dir.path}/${item.no}-${i+1}.jpg');
-      }
-    });
-  }
-
-  download(url, savefile) {
-    http.get(url).then((response) {
-      new File(savefile).writeAsBytes(response.bodyBytes);
-      print('downloaded - ' + savefile);
-    });
-  }
 
 
   Crawler(this.item);
@@ -276,17 +289,6 @@ class Crawler {
     return "...";
   }
 
-  List<String> inspect2(String site_code){
-//    RegExp exp = new RegExp(r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)");
-    List<String> rs = List<String>();
-    RegExp exp = new RegExp(r'"hiRes":"(.*?)"', multiLine: true);
-    var matches = exp.allMatches(site_code);
-    for(Match match in matches) {
-      rs.add(match[1]);
-    }
-
-    return rs;
-  }
 
   void imageCrawl() {
     Future.delayed(const Duration(seconds: 5), () => "1");
