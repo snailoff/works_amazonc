@@ -57,8 +57,11 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   TextEditingController urlInputController;
   TextEditingController noInputController;
 
+  var isDisableAction = false;
+
   var lists = List<CrawlItem>();
 
+  final singleFormKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -74,9 +77,182 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     super.dispose();
   }
 
+
+  @override
+  Widget build(BuildContext context) {
+
+    return MaterialApp(
+      title: "amazonc app",
+      home: DefaultTabController(
+        length: 2,
+        child: 
+        Scaffold(
+          appBar: AppBar(
+            title: Text('amazon crawl type'),
+            bottom: TabBar(
+              unselectedLabelColor: Colors.white.withOpacity(0.3),
+              tabs: [
+                Tab(text: "excel"),
+                Tab(text: 'url'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              // url crawl
+
+              Padding(
+                padding: EdgeInsets.all(10.0),
+                child: Column( children: <Widget>[
+                  Form(
+                    key: singleFormKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        TextFormField(
+                          decoration: InputDecoration( labelText: '관리번호'),
+                          controller: noInputController,
+                          validator: (value) {
+                            if (value.isEmpty) {
+                              return '관리번호를 입력해 주세요.';
+                            }
+                            return null;
+                          },
+                        ),
+                        TextFormField(
+                          decoration: InputDecoration( labelText: '아마존 상품페이지 URL'),
+                          controller: urlInputController,
+                          validator: (value) {
+                            if (value.isEmpty) {
+                              return 'URL을 입력해 주세요.';
+                            }
+                            return null;
+                          },
+                        ),
+                        ButtonBar(
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            new RaisedButton(
+                              child: const Text('Reset'),
+                              onPressed: isDisableAction ? null : singleCrawlingReset,
+                            ),
+                            new RaisedButton(
+                              child: const Text('Image Crawl'),
+                              onPressed: isDisableAction ? null : () async {
+                                if(singleFormKey.currentState.validate()){
+                                  resetQueue();
+                                  var item = CrawlItem(noInputController.text, urlInputController.text);
+                                  addToQueue(item);
+                                  await crawlingSingle();
+
+                                }
+
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+//                  FloatingActionButton(
+//                    tooltip: 'Refresh',
+//                    child: Icon(Icons.replay),
+//                    onPressed: isDisableRefresh ? null : singleCrawlingReset
+//
+//                  ),
+
+                  Expanded(
+                      child:
+                      ListView.builder
+                        (
+                          itemCount: lists.length,
+                          itemBuilder: (BuildContext ctxt, int index) {
+                            return Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(lists[index].no),
+                                ),
+                                Text("->     "),
+                                Expanded(
+                                  child: Text(lists[index].state),
+                                )
+                              ],
+
+                            );
+//                            return Text(lists[index].url);
+                          }
+                      )
+
+                  )
+                ],
+
+                ),
+
+
+              ),
+              // excel crawl
+              Icon(Icons.directions_car),
+            ],
+          ),
+        ),
+      ),
+
+      );
+
+  }
+
+  crawlingSingle() async {
+    print("===== crawling (single) =====");
+    if(lists == null || lists.length == 0){
+      print("** no queue");
+      return;
+    }
+
+    disableAction();
+
+    var item = lists.first;
+    try{
+      await crawling(item);
+      stateChanging(item, CrawlState.Completed);
+
+    }
+    on Exception catch(e){
+      stateChanging(item, CrawlState.Failed);
+    }
+
+    enableAction();
+  }
+
+  crawlingMultiple() async {
+    print("===== crawling (multiple) =====");
+    if(lists == null || lists.length == 0){
+      print("** no queue");
+      return;
+    }
+
+    disableAction();
+
+    for(var item in lists){
+
+      try{
+        await crawling(item);
+        stateChanging(item, CrawlState.Completed);
+      }
+      on Exception catch(e){
+        stateChanging(item, CrawlState.Failed);
+      }
+    }
+
+    enableAction();
+  }
+
   crawling(CrawlItem item) async {
-    print("===== crawling start =====");
-    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
+    print("= crawling start =");
+
+    stateChanging(item, CrawlState.Crawling);
+//    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
+    var url = "https://www.amazon.com/Fotodiox-Lens-Mount-Adapter-Mirrorless/dp/B00VTZ1J9Q?ref_=ast_slp_dp";
     List<String> urls;
 
     print("= url : " + url);
@@ -89,10 +265,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
 
     await downloadAll(item, urls);
 
-    setState(() {
-      item.isCrawl = true;
-    });
-    print("===== crawling end =====");
+    print("= crawling end =");
   }
 
   downloadAll(CrawlItem item, List<String> urls) async {
@@ -125,123 +298,47 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     return rs;
   }
 
-  @override
-  Widget build(BuildContext context) {
+  stateChanging(CrawlItem item, String state){
+    for(var c in lists){
+      if(c.no == item.no){
+        setState(() {
+          c.state = state;
+        });
+      }
+    }
+  }
 
-    return MaterialApp(
-      title: "amazonc app",
-      home: DefaultTabController(
-        length: 2,
-        child: 
-        Scaffold(
-          appBar: AppBar(
-            title: Text('amazon crawl type'),
-            bottom: TabBar(
-              unselectedLabelColor: Colors.white.withOpacity(0.3),
-              tabs: [
-                Tab(text: "excel"),
-                Tab(text: 'url'),
-              ],
-            ),
-          ),
-          body: TabBarView(
-            children: [
-              // url crawl
+  addToQueue(CrawlItem item){
+    setState(() {
+      lists.add(item);
+    });
+  }
 
-              Padding(
-                padding: EdgeInsets.all(10.0),
-                child: Column( children: <Widget>[
-                  TextFormField(
-                    decoration: InputDecoration( labelText: '관리번호'),
-                    controller: noInputController,
-                  ),
-                  TextFormField(
-                    decoration: InputDecoration( labelText: '아마존 URL'),
-                    controller: urlInputController,
-                  ),
-                  ButtonBar(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      new RaisedButton(
-                        child: const Text('Clear'),
-                        onPressed: () {
-                          urlInputController.clear();
-                        },
-                      ),
-                      new RaisedButton(
-                        child: const Text('Image Crawl'),
-                        onPressed: () async {
-                          var item = CrawlItem(noInputController.text, urlInputController.text);
+  resetQueue(){
+    setState(() {
+      lists.clear();
+    });
+  }
 
-                          // 관리번호로 검색하여 상태업데이트하는 메서드 필요.
-                          setState(() {
-                            lists = List<CrawlItem>();
-                            lists.add(item);
-                          });
-
-                          await crawling(item);
-
-//                            return showDialog(
-//                              context: context,
-//                              builder: (context) {
-//                                return AlertDialog(
-//                                  content: Text(urlInputController.text),
-//                                );
-//                              },
-//                            );
-                        },
-                      ),
-                    ],
-                  ),
-                  // Scrollbar(
-                  //   child: ListView(
-                  //     children: <Widget>[
-                  //       Text("hehe")
-                  //     ]
-                  //   )
-                  // ),
-
-                  FloatingActionButton(
-                    tooltip: 'Refresh',
-                    child: Icon(Icons.replay),
-                  ),
-
-                  Expanded(
-                      child:
-                      ListView.builder
-                        (
-                          itemCount: lists.length,
-                          itemBuilder: (BuildContext ctxt, int index) {
-                            return Row(
-                              children: <Widget>[
-                                Text(lists[index].isCrawl.toString()),
-                                Text(" - "),
-                                Text(lists[index].no.toString()),
-                                Text(" - "),
-                                Text(lists[index].url)
-                              ],
-
-                            );
-//                            return Text(lists[index].url);
-                          }
-                      )
-
-                  )
-                ],
-
-                ),
+  disableAction() {
+    setState(() {
+      isDisableAction = true;
+    });
+  }
+  enableAction() {
+    setState(() {
+      isDisableAction = false;
+    });
+  }
 
 
-              ),
-              // excel crawl
-              Icon(Icons.directions_car),
-            ],
-          ),
-        ),
-      ),
+  void singleCrawlingReset() {
+    noInputController.clear();
+    urlInputController.clear();
 
-      );
-
+    setState(() {
+      lists = List<CrawlItem>();
+    });
   }
 
 }
@@ -253,46 +350,16 @@ class CrawlItem {
   int imageCount;
   int crawlCount;
 
-  bool isCrawl = false;
+  String state = CrawlState.Ready;
 
   CrawlItem(this.no, this.url);
 }
 
-
-class Crawler {
-  CrawlItem item;
-
-  List<String> urls;
-  String content;
-
-
-
-  Crawler(this.item);
-
-  String inspect(String site_code){
-//    RegExp exp = new RegExp(r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)");
-    RegExp exp = new RegExp(r'^(.*)$', multiLine: true);
-
-    if(exp.hasMatch(site_code)){
-      var block = exp.firstMatch(site_code);
-      print('block----------------' + block[0]);
-      RegExp detailExp = new RegExp(r'"hiRes":".*?"');
-      var matches = detailExp.allMatches(block[0]);
-
-      for(Match match in matches) {
-        print(match[0]);
-      }
-
-    }else{
-      print("not matched!!!!!!!!!!!!!!");
-    }
-    return "...";
-  }
-
-
-  void imageCrawl() {
-    Future.delayed(const Duration(seconds: 5), () => "1");
-  }
-
-
+class CrawlState {
+  static String Ready = "Ready";
+  static String Crawling = "Crawling";
+  static String Passed = "Passed";
+  static String Completed = "Completed";
+  static String Failed = "Failed";
 }
+
