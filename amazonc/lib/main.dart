@@ -25,8 +25,8 @@ import 'package:mysql1/mysql1.dart' as sql;
 var settings = new sql.ConnectionSettings(
   host: 'jobbot.co.kr',
   port: 3306,
-  user: 'jobbot',
-  password: 'skantkfkd00',
+  user: 'amazonc',
+  password: 'skantkfkd55',
   db: 'amazonc',
 );
 
@@ -50,7 +50,7 @@ class MyApp extends StatelessWidget {
       home: LoginPage(),
       routes: {
         "/login": (_) => new LoginPage(),
-        "/home": (_) => new MyHomePage()
+        "/home": (_) => new CrawlPage()
       }
     );
   }
@@ -193,18 +193,18 @@ class LoginState extends State<LoginPage> {
 
 
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
+class CrawlPage extends StatefulWidget {
+  CrawlPage({Key key, this.title}) : super(key: key);
 
   final String title;
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _CrawlPageState createState() => _CrawlPageState();
 }
 
 
 
-class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateMixin {
+class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMixin {
 
   TextEditingController urlInputController;
   TextEditingController noInputController;
