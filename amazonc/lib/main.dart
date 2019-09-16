@@ -58,10 +58,10 @@ class MyApp extends StatelessWidget {
 
 class LoginPage extends StatefulWidget {
   @override
-  State<StatefulWidget> createState() => LoginState();
+  State<StatefulWidget> createState() => _LoginState();
 }
 
-class LoginState extends State<LoginPage> {
+class _LoginState extends State<LoginPage> {
   TextEditingController useridInputController;
   TextEditingController passwdInputController;
 
@@ -114,7 +114,7 @@ class LoginState extends State<LoginPage> {
     return MaterialApp(
       home: Scaffold(
           appBar: AppBar(
-            title: Text('amazon crawl type'),
+            title: Text('amazon crawl'),
           ),
           body: Padding(
               padding: EdgeInsets.all(10.0),
@@ -238,7 +238,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
         length: 2,
         child: Scaffold(
           appBar: AppBar(
-            title: Text('amazon crawl type'),
+            title: Text('amazon crawl'),
             bottom: TabBar(
               unselectedLabelColor: Colors.white.withOpacity(0.3),
               tabs: [
