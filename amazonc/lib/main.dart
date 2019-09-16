@@ -20,6 +20,15 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:mysql1/mysql1.dart' as sql;
+
+var settings = new sql.ConnectionSettings(
+  host: 'jobbot.co.kr',
+  port: 3306,
+  user: 'jobbot',
+  password: 'skantkfkd00',
+  db: 'amazonc',
+);
 
 void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
@@ -38,10 +47,151 @@ class MyApp extends StatelessWidget {
         // See https://github.com/flutter/flutter/wiki/Desktop-shells#fonts
         fontFamily: 'Roboto',
       ),
-      home: MyHomePage(title: 'amazonc-*'),
+      home: LoginPage(),
+      routes: {
+        "/login": (_) => new LoginPage(),
+        "/home": (_) => new MyHomePage()
+      }
     );
   }
 }
+
+class LoginPage extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => LoginState();
+}
+
+class LoginState extends State<LoginPage> {
+  TextEditingController useridInputController;
+  TextEditingController passwdInputController;
+
+  final loginFormKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    useridInputController = TextEditingController();
+    passwdInputController = TextEditingController();
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    useridInputController.dispose();
+    passwdInputController.dispose();
+    super.dispose();
+  }
+
+  Future<bool> isService() async {
+    final connection = await sql.MySqlConnection.connect(settings);
+    var results = await connection.query("select is_service from amazonc_setting limit 1");
+    bool result = false;
+
+    if(results != null && results.length == 1 && results.first[0] == 1){
+      result = true;
+    }
+
+    await connection.close();
+    return result;
+  }
+
+  Future<bool> isValidUser() async {
+    final connection = await sql.MySqlConnection.connect(settings);
+    var userid = useridInputController != null ? useridInputController.text : "";
+    var passwd = passwdInputController != null ? passwdInputController.text : "";
+    print("userid: ${userid}, password: ${passwd}");
+    var results = await connection.query("select passwd=password('${passwd}') from amazonc_user where userid='${userid}'");
+    bool result = false;
+
+    if(results != null && results.length == 1 && results.first[0] == 1) {
+      result = true;
+    }
+
+    await connection.close();
+    return result;
+  }
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+          appBar: AppBar(
+            title: Text('amazon crawl type'),
+          ),
+          body: Padding(
+              padding: EdgeInsets.all(10.0),
+              child:
+                  Form(key: loginFormKey,
+                    child: Column(
+                      children: <Widget>[
+                        TextFormField(
+                          decoration: InputDecoration( labelText: 'ID'),
+                          controller: useridInputController,
+                          validator: (value) {
+                            if (value.isEmpty) {
+                              return 'ID 를 입력해주세요.';
+                            }
+                            return null;
+                          },
+                        ),
+                      TextFormField(
+                        decoration: InputDecoration( labelText: 'PASSWORD'),
+                        controller: passwdInputController,
+                        validator: (value) {
+                          if (value.isEmpty) {
+                            return 'PASSWORD 를 입력해주세요.';
+                          }
+                          return null;
+                        },
+                      ),
+                      RaisedButton(
+                        onPressed: () async {
+                          if(loginFormKey.currentState.validate()) {
+                            var isRun = await isService();
+                            var isValid = await isValidUser();
+
+                            if(await isService() && await isValidUser()){
+                              Navigator.pushReplacementNamed(context, "/home");
+
+                            }else{
+                              await showDialog(
+                                context: context,
+                                builder: (BuildContext context) {
+                                  // return object of type Dialog
+                                  return AlertDialog(
+//                              title: new Text("Alert Dialog title"),
+                                    content: new Text("존재하지 않는 User 이거나 Password가 잘못되었습니다. "),
+                                    actions: <Widget>[
+                                      // usually buttons at the bottom of the dialog
+                                      new FlatButton(
+                                        child: new Text("Close"),
+                                        onPressed: () {
+                                          Navigator.of(context).pop();
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+
+                            }
+                          }
+
+                        },
+                        child: Text('login'),
+
+                      ),
+                    ],
+                  )
+                ,)
+
+          )
+      ),
+
+    );
+  }
+
+}
+
+
 
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key key, this.title}) : super(key: key);
@@ -51,6 +201,8 @@ class MyHomePage extends StatefulWidget {
   @override
   _MyHomePageState createState() => _MyHomePageState();
 }
+
+
 
 class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateMixin {
 
@@ -77,7 +229,6 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     super.dispose();
   }
 
-
   @override
   Widget build(BuildContext context) {
 
@@ -85,8 +236,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
       title: "amazonc app",
       home: DefaultTabController(
         length: 2,
-        child: 
-        Scaffold(
+        child: Scaffold(
           appBar: AppBar(
             title: Text('amazon crawl type'),
             bottom: TabBar(
@@ -99,6 +249,8 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
           ),
           body: TabBarView(
             children: [
+              // excel crawl
+              Icon(Icons.directions_car),
               // url crawl
 
               Padding(
@@ -154,14 +306,6 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                       ],
                     ),
                   ),
-
-//                  FloatingActionButton(
-//                    tooltip: 'Refresh',
-//                    child: Icon(Icons.replay),
-//                    onPressed: isDisableRefresh ? null : singleCrawlingReset
-//
-//                  ),
-
                   Expanded(
                       child:
                       ListView.builder
@@ -188,11 +332,9 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                 ],
 
                 ),
-
-
               ),
-              // excel crawl
-              Icon(Icons.directions_car),
+
+
             ],
           ),
         ),
@@ -201,6 +343,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
       );
 
   }
+
 
   crawlingSingle() async {
     print("===== crawling (single) =====");
