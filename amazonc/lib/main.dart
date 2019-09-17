@@ -254,10 +254,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
               unselectedLabelColor: Colors.white.withOpacity(0.3),
               tabs: [
                 Tab(text: "excel"),
-                GestureDetector(
-                  child: Tab(text: 'url'),
-                  onTap: () => singleCrawlingReset
-                )
+                Tab(text: 'url'),
               ],
             ),
           ),
@@ -276,21 +273,23 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: <Widget>[
+                                Container(
+                                  child: Expanded(
+                                      child: ListView.builder(
+                                          itemCount: filelists.length,
+                                          itemBuilder: (BuildContext ctxt, int index) {
+                                            return GestureDetector(
+                                                child: Text(basename(filelists[index].path)),
+                                                onTap: () => selectTarget(filelists[index])
+                                            );
+                                          }
+                                      )
+                                  ),
+                                ),
                                 new RaisedButton(
-                                  child: Text("refresh"),
+                                    child: Text("refresh"),
                                     onPressed: refreshTargetList
                                 ),
-                                Expanded(
-                                    child: ListView.builder(
-                                        itemCount: filelists.length,
-                                        itemBuilder: (BuildContext ctxt, int index) {
-                                          return GestureDetector(
-                                            child: Text(basename(filelists[index].path)),
-                                            onTap: () => selectTarget(filelists[index])
-                                          );
-                                        }
-                                    )
-                                )
                               ],
                             ),
                           ),
@@ -298,14 +297,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                           Flexible(
                             child: Column(
                                 children: <Widget>[
-                                  new RaisedButton(
-                                      child: Text("crawl"),
-                                      onPressed: () async {
-                                        await crawlingMultiple();
-                                      }),
                                   Row(
                                     children: <Widget>[
-                                      Text("target file : "),
                                       Text(targetFileName),
                                     ],
                                   ),
@@ -329,7 +322,12 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                           }
                                       )
 
-                                  )
+                                  ),
+                                  RaisedButton(
+                                      child: Text("crawl"),
+                                      onPressed: () async {
+                                        await crawlingMultiple();
+                                      }),
                                 ],
                               )
                           )
@@ -371,11 +369,11 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                         ButtonBar(
                           mainAxisSize: MainAxisSize.max,
                           children: [
-                            new RaisedButton(
+                            RaisedButton(
                               child: const Text('Reset'),
                               onPressed: isDisableAction ? null : singleCrawlingReset,
                             ),
-                            new RaisedButton(
+                            RaisedButton(
                               child: const Text('Image Crawl'),
                               onPressed: isDisableAction ? null : () async {
                                 if(singleFormKey.currentState.validate()){
@@ -504,7 +502,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   downloadAll(CrawlItem item, List<String> urls) async {
     print("= download start =");
     String prefix = '/Users/snailoff/workspace/flutter/works_amazonc/temp/';
-    await new Directory(prefix + item.no).create().then((Directory dir) async {
+    await Directory(prefix + item.no).create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
         await download(urls[i], '${dir.path}/${item.no}-${i+1}.jpg');
       }
@@ -514,15 +512,15 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
   download(url, savefile) async {
     await http.get(url).then((response) {
-      new File(savefile).writeAsBytes(response.bodyBytes);
+      File(savefile).writeAsBytes(response.bodyBytes);
       print('downloaded - ' + savefile);
     });
   }
 
   List<String> inspect2(String site_code){
 //    RegExp exp = new RegExp(r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)");
-    List<String> rs = List<String>();
-    RegExp exp = new RegExp(r'"hiRes":"(.*?)"', multiLine: true);
+    var rs = List<String>();
+    var exp = RegExp(r'"hiRes":"(.*?)"', multiLine: true);
     var matches = exp.allMatches(site_code);
     for(Match match in matches) {
       rs.add(match[1]);
@@ -568,7 +566,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
     var list = List<File>();
 
-    var dir = new Directory('/Users/snailoff/workspace/flutter/works_amazonc/temp');
+    var dir = Directory('/Users/snailoff/workspace/flutter/works_amazonc/temp');
     List contents = dir.listSync();
     for (var fileOrDir in contents) {
       if (fileOrDir is File) {
@@ -616,7 +614,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
   void multipleCrawlingReset() {
     setState(() {
-      singlelist.clear();
+      multiplelist.clear();
       targetFileName = "<not selected>";
     });
 
