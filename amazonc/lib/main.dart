@@ -21,6 +21,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:mysql1/mysql1.dart' as sql;
+import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
+import 'package:path/path.dart';
 
 var settings = new sql.ConnectionSettings(
   host: 'jobbot.co.kr',
@@ -47,7 +49,8 @@ class MyApp extends StatelessWidget {
         // See https://github.com/flutter/flutter/wiki/Desktop-shells#fonts
         fontFamily: 'Roboto',
       ),
-      home: LoginPage(),
+//      home: LoginPage(),
+        home: CrawlPage(),
       routes: {
         "/login": (_) => new LoginPage(),
         "/home": (_) => new CrawlPage()
@@ -209,10 +212,15 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   TextEditingController urlInputController;
   TextEditingController noInputController;
 
-  var isDisableAction = false;
-
+  // common
   var lists = List<CrawlItem>();
 
+  // multiple
+  var filelists = List<File>();
+  var targetFileName = "<not selected>";
+
+  // single
+  var isDisableAction = false;
   final singleFormKey = GlobalKey<FormState>();
 
   @override
@@ -220,6 +228,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     urlInputController = TextEditingController();
     noInputController = TextEditingController();
     super.initState();
+
+    refreshTargetList();
   }
 
   @override
@@ -228,6 +238,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     noInputController.dispose();
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -243,16 +254,92 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
               unselectedLabelColor: Colors.white.withOpacity(0.3),
               tabs: [
                 Tab(text: "excel"),
-                Tab(text: 'url'),
+                GestureDetector(
+                  child: Tab(text: 'url'),
+                  onTap: () => singleCrawlingReset
+                )
               ],
             ),
           ),
           body: TabBarView(
-            children: [
-              // excel crawl
-              Icon(Icons.directions_car),
-              // url crawl
 
+            children: [
+              // ========================================= excel crawl
+              Padding(
+                padding: EdgeInsets.all(10.0),
+                child: Container(
+                  child:
+                      Row(
+                        mainAxisSize: MainAxisSize.max,
+                        children: <Widget>[
+                          Flexible(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: <Widget>[
+                                new RaisedButton(
+                                  child: Text("refresh"),
+                                    onPressed: refreshTargetList
+                                ),
+                                Expanded(
+                                    child: ListView.builder(
+                                        itemCount: filelists.length,
+                                        itemBuilder: (BuildContext ctxt, int index) {
+                                          return GestureDetector(
+                                            child: Text(basename(filelists[index].path)),
+                                            onTap: () => selectTarget(filelists[index])
+                                          );
+                                        }
+                                    )
+                                )
+                              ],
+                            ),
+                          ),
+
+                          Flexible(
+                            child: Column(
+                                children: <Widget>[
+                                  new RaisedButton(
+                                      child: Text("crawl"),
+                                      onPressed: () async {
+                                        await crawlingMultiple();
+                                      }),
+                                  Row(
+                                    children: <Widget>[
+                                      Text("target file : "),
+                                      Text(targetFileName),
+                                    ],
+                                  ),
+                                  Expanded(
+                                      child:
+                                      ListView.builder
+                                        (
+                                          itemCount: lists.length,
+                                          itemBuilder: (BuildContext ctxt, int index) {
+                                            return Row(
+                                              children: <Widget>[
+                                                Expanded(
+                                                  child: Text(lists[index].no),
+                                                ),
+                                                Text("->     "),
+                                                Expanded(
+                                                  child: Text(lists[index].state),
+                                                )
+                                              ],
+                                            );
+                                          }
+                                      )
+
+                                  )
+                                ],
+                              )
+                          )
+                        ],
+                      )
+
+                ),
+              ),
+
+              // ========================================= url crawl
               Padding(
                 padding: EdgeInsets.all(10.0),
                 child: Column( children: <Widget>[
@@ -395,7 +482,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
     stateChanging(item, CrawlState.Crawling);
 //    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
-    var url = "https://www.amazon.com/Fotodiox-Lens-Mount-Adapter-Mirrorless/dp/B00VTZ1J9Q?ref_=ast_slp_dp";
+//    var url = "https://www.amazon.com/Fotodiox-Lens-Mount-Adapter-Mirrorless/dp/B00VTZ1J9Q?ref_=ast_slp_dp";
+    var url = item.url;
     List<String> urls;
 
     print("= url : " + url);
@@ -475,12 +563,73 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
 
+  void refreshTargetList(){
+    multipleCrawlingReset();
+
+    var list = List<File>();
+
+    var dir = new Directory('/Users/snailoff/workspace/flutter/works_amazonc/temp');
+    List contents = dir.listSync();
+    for (var fileOrDir in contents) {
+      if (fileOrDir is File) {
+        if(fileOrDir.path.endsWith(".xlsx") || fileOrDir.path.endsWith(".xls")){
+          print(fileOrDir.path);
+          list.add(fileOrDir);
+        }
+      }
+    }
+
+    setState(() {
+      filelists = list;
+    });
+  }
+
+  void selectTarget(File file) async {
+    if(file == null)
+      return;
+
+    resetQueue();
+
+    setState(() {
+      targetFileName = basename(file.path);
+    });
+
+    var bytes = file.readAsBytesSync();
+    var decoder = new SpreadsheetDecoder.decodeBytes(bytes);
+
+    if (decoder.tables.keys == null)
+      return;
+    var sheetname = decoder.tables.keys.first;
+    var table = decoder.tables[sheetname];
+
+    var exp =  new RegExp(r"^https?://.*$");
+    for(var values in table.rows){
+      if(values[1] == null || !exp.hasMatch(values[1]))
+        continue;
+      var item = CrawlItem(values[0].toString(), values[1]);
+      addToQueue(item);
+    }
+
+  }
+
+
+
+
+  void multipleCrawlingReset() {
+    setState(() {
+      lists.clear();
+      targetFileName = "<not selected>";
+    });
+
+  }
+
   void singleCrawlingReset() {
+    print("### single tapp!!");
     noInputController.clear();
     urlInputController.clear();
 
     setState(() {
-      lists = List<CrawlItem>();
+      lists.clear();
     });
   }
 
@@ -505,4 +654,6 @@ class CrawlState {
   static String Completed = "Completed";
   static String Failed = "Failed";
 }
+
+
 
