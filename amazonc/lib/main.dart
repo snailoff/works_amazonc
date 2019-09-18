@@ -467,6 +467,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
     var item = singlelist.first;
     try{
+      singleStateChanging(item, CrawlState.Crawling);
       await crawling(item);
       singleStateChanging(item, CrawlState.Completed);
 
@@ -490,6 +491,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     for(var item in multiplelist){
 
       try{
+        multipleStateChanging(item, CrawlState.Crawling);
         await crawling(item);
         multipleStateChanging(item, CrawlState.Completed);
       }
@@ -504,7 +506,6 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   crawling(CrawlItem item) async {
     print("= crawling start =");
 
-    singleStateChanging(item, CrawlState.Crawling);
 //    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
 //    var url = "https://www.amazon.com/Fotodiox-Lens-Mount-Adapter-Mirrorless/dp/B00VTZ1J9Q?ref_=ast_slp_dp";
     var url = item.url;
@@ -542,12 +543,15 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
   List<String> inspect2(String site_code){
-//    RegExp exp = new RegExp(r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)");
     var rs = List<String>();
-    var exp = RegExp(r'"hiRes":"(.*?)"', multiLine: true);
-    var matches = exp.allMatches(site_code);
-    for(Match match in matches) {
-      rs.add(match[1]);
+    var para = new RegExp(r'"ImageBlockATF".*?</script>', dotAll: true);
+    if (para.hasMatch(site_code)) {
+      var paramatch = para.firstMatch(site_code)[0];
+      var exp = RegExp(r'"hiRes":"(.*?)"', multiLine: true);
+      var matches = exp.allMatches(paramatch);
+      for(Match match in matches) {
+        rs.add(match[1]);
+      }
     }
 
     return rs;
@@ -564,7 +568,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
   multipleStateChanging(CrawlItem item, String state){
-    for(var c in singlelist){
+    for(var c in multiplelist){
       if(c.no == item.no){
         setState(() {
           c.state = state;
