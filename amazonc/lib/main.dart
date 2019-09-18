@@ -23,6 +23,7 @@ import 'package:http/http.dart' as http;
 import 'package:mysql1/mysql1.dart' as sql;
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 var settings = new sql.ConnectionSettings(
   host: 'jobbot.co.kr',
@@ -53,7 +54,7 @@ class MyApp extends StatelessWidget {
         home: CrawlPage(),
       routes: {
         "/login": (_) => new LoginPage(),
-        "/home": (_) => new CrawlPage()
+        "/home": (_) => new CrawlPage(),
       }
     );
   }
@@ -230,6 +231,12 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     super.initState();
 
     refreshTargetList();
+
+//    print("==================");
+//    var test = getSortingOrder().then((_) => print(_));
+//    setSortingOrder("lala");
+//    print("==================");
+
   }
 
   @override
@@ -237,6 +244,21 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     urlInputController.dispose();
     noInputController.dispose();
     super.dispose();
+  }
+
+  Future<String> getSortingOrder() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    return prefs.getString("hehe") ?? 'name';
+  }
+
+  /// ----------------------------------------------------------
+  /// Method that saves the user decision on sorting order
+  /// ----------------------------------------------------------
+  Future<bool> setSortingOrder(String value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    return prefs.setString("hehe", value);
   }
 
 
@@ -279,7 +301,10 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                           itemCount: filelists.length,
                                           itemBuilder: (BuildContext ctxt, int index) {
                                             return GestureDetector(
-                                                child: Text(basename(filelists[index].path)),
+                                                child: Padding(
+                                                  padding: EdgeInsets.all(5.0),
+                                                  child: Text(basename(filelists[index].path)),
+                                                ),
                                                 onTap: () => selectTarget(filelists[index])
                                             );
                                           }
@@ -304,8 +329,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                   ),
                                   Expanded(
                                       child:
-                                      ListView.builder
-                                        (
+                                      ListView.builder(
                                           itemCount: multiplelist.length,
                                           itemBuilder: (BuildContext ctxt, int index) {
                                             return Row(
