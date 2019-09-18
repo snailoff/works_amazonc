@@ -33,6 +33,8 @@ var settings = new sql.ConnectionSettings(
   db: 'amazonc',
 );
 
+var abspath = '/amazonc';
+
 void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
@@ -526,8 +528,9 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
   downloadAll(CrawlItem item, List<String> urls) async {
     print("= download start =");
-    String prefix = '/Users/snailoff/workspace/flutter/works_amazonc/temp/';
-    await Directory(prefix + item.no).create().then((Directory dir) async {
+//    String prefix = '/Users/snailoff/workspace/flutter/works_amazonc/temp/';
+    String prefix = abspath;
+    await Directory(prefix + '/' + item.no).create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
         await download(urls[i], '${dir.path}/${item.no}-${i+1}.jpg');
       }
@@ -594,7 +597,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
     var list = List<File>();
 
-    var dir = Directory('/Users/snailoff/workspace/flutter/works_amazonc/temp');
+//    var dir = Directory('/Users/snailoff/workspace/flutter/works_amazonc/temp');
+    var dir = Directory(abspath);
     List contents = dir.listSync();
     for (var fileOrDir in contents) {
       if (fileOrDir is File) {
