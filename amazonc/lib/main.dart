@@ -33,13 +33,45 @@ var settings = new sql.ConnectionSettings(
   db: 'amazonc',
 );
 
-var abspath = '/amazonc';
+//    var abspath = '/Users/snailoff/workspace/flutter/works_amazonc/temp/';
+var abspath = '/amazonc_download';
+//var abspath = '/amazonc';
 
 void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
 
-  runApp(new MyApp());
+
+  var workdir = new Directory(abspath);
+  workdir.exists().then((isthere){
+    if(isthere == false){
+        workdir.create().then((_) {
+          runApp(new MyApp());
+        }).catchError((_){
+          runApp(new INeedWorkdir());
+        });
+    }else{
+      runApp(new MyApp());
+    }
+  });
+
+}
+
+class INeedWorkdir extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+        home: Scaffold(
+            appBar: AppBar(
+              title: Text('amazon crawl'),
+            ),
+            body: Padding(
+              padding: EdgeInsets.all(10.0),
+              child: Text("make work directory. 'c:\\amazonc_download'"),
+            )
+        )
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -52,8 +84,7 @@ class MyApp extends StatelessWidget {
         // See https://github.com/flutter/flutter/wiki/Desktop-shells#fonts
         fontFamily: 'Roboto',
       ),
-//      home: LoginPage(),
-        home: CrawlPage(),
+      home: LoginPage(),
       routes: {
         "/login": (_) => new LoginPage(),
         "/home": (_) => new CrawlPage(),
@@ -528,7 +559,6 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
   downloadAll(CrawlItem item, List<String> urls) async {
     print("= download start =");
-//    String prefix = '/Users/snailoff/workspace/flutter/works_amazonc/temp/';
     String prefix = abspath;
     await Directory(prefix + '/' + item.no).create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
@@ -591,14 +621,15 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     });
   }
 
-
   void refreshTargetList(){
     multipleCrawlingReset();
 
     var list = List<File>();
 
-//    var dir = Directory('/Users/snailoff/workspace/flutter/works_amazonc/temp');
     var dir = Directory(abspath);
+    if(dir.exists() == false)
+      return;
+
     List contents = dir.listSync();
     for (var fileOrDir in contents) {
       if (fileOrDir is File) {
