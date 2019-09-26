@@ -42,8 +42,6 @@ void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
 
-
-
   var workdir = new Directory(abspath);
   workdir.exists().then((isthere){
     if(isthere == false){
