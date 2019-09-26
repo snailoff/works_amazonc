@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart'
     show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'dart:async';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:mysql1/mysql1.dart' as sql;
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
@@ -40,6 +41,7 @@ var abspath = '/amazonc_download';
 void main() {
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+
 
 
   var workdir = new Directory(abspath);
@@ -78,12 +80,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'amazonc',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        // See https://github.com/flutter/flutter/wiki/Desktop-shells#fonts
-        fontFamily: 'Roboto',
-      ),
+        debugShowCheckedModeBanner: false,
+        title: 'amazonc',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          // See https://github.com/flutter/flutter/wiki/Desktop-shells#fonts
+          fontFamily: 'Roboto',
+        ),
       home: LoginPage(),
       routes: {
         "/login": (_) => new LoginPage(),
@@ -91,6 +94,36 @@ class MyApp extends StatelessWidget {
       }
     );
   }
+}
+
+class SessionManager {
+  static Future<bool> isService() async {
+    final connection = await sql.MySqlConnection.connect(settings);
+    var results = await connection.query("select is_service from amazonc_setting limit 1");
+    bool result = false;
+
+    if(results != null && results.length == 1 && results.first[0] == 1){
+      result = true;
+    }
+
+    await connection.close();
+    return result;
+  }
+
+  static Future<bool> isValidUser(userid, passwd) async {
+    final connection = await sql.MySqlConnection.connect(settings);
+    print("userid: ${userid}, password: ${passwd}");
+    var results = await connection.query("select passwd=password('${passwd}') from amazonc_user where userid='${userid}'");
+    bool result = false;
+
+    if(results != null && results.length == 1 && results.first[0] == 1) {
+      result = true;
+    }
+
+    await connection.close();
+    return result;
+  }
+
 }
 
 class LoginPage extends StatefulWidget {
@@ -118,37 +151,11 @@ class _LoginState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<bool> isService() async {
-    final connection = await sql.MySqlConnection.connect(settings);
-    var results = await connection.query("select is_service from amazonc_setting limit 1");
-    bool result = false;
 
-    if(results != null && results.length == 1 && results.first[0] == 1){
-      result = true;
-    }
-
-    await connection.close();
-    return result;
-  }
-
-  Future<bool> isValidUser() async {
-    final connection = await sql.MySqlConnection.connect(settings);
-    var userid = useridInputController != null ? useridInputController.text : "";
-    var passwd = passwdInputController != null ? passwdInputController.text : "";
-    print("userid: ${userid}, password: ${passwd}");
-    var results = await connection.query("select passwd=password('${passwd}') from amazonc_user where userid='${userid}'");
-    bool result = false;
-
-    if(results != null && results.length == 1 && results.first[0] == 1) {
-      result = true;
-    }
-
-    await connection.close();
-    return result;
-  }
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       home: Scaffold(
           appBar: AppBar(
             title: Text('amazon crawl'),
@@ -160,11 +167,11 @@ class _LoginState extends State<LoginPage> {
                     child: Column(
                       children: <Widget>[
                         TextFormField(
-                          decoration: InputDecoration( labelText: 'ID'),
+                          decoration: InputDecoration( labelText: 'User ID'),
                           controller: useridInputController,
                           validator: (value) {
                             if (value.isEmpty) {
-                              return 'ID 를 입력해주세요.';
+                              return 'User ID를 입력해주세요.';
                             }
                             return null;
                           },
@@ -172,6 +179,7 @@ class _LoginState extends State<LoginPage> {
                       TextFormField(
                         decoration: InputDecoration( labelText: 'PASSWORD'),
                         controller: passwdInputController,
+                        obscureText: true,
                         validator: (value) {
                           if (value.isEmpty) {
                             return 'PASSWORD 를 입력해주세요.';
@@ -182,24 +190,21 @@ class _LoginState extends State<LoginPage> {
                       RaisedButton(
                         onPressed: () async {
                           if(loginFormKey.currentState.validate()) {
-                            var isRun = await isService();
-                            var isValid = await isValidUser();
+                            var isservice = await SessionManager.isService();
+                            var isvalid = await SessionManager.isValidUser(
+                                useridInputController != null ? useridInputController.text : '',
+                                passwdInputController != null ? passwdInputController.text : ''
+                            );
 
-                            if(await isService() && await isValidUser()){
-                              Navigator.pushReplacementNamed(context, "/home");
-
-                            }else{
+                            if(isservice == false){
                               await showDialog(
                                 context: context,
                                 builder: (BuildContext context) {
-                                  // return object of type Dialog
                                   return AlertDialog(
-//                              title: new Text("Alert Dialog title"),
-                                    content: new Text("존재하지 않는 User 이거나 Password가 잘못되었습니다. "),
+                                    content: new Text('서비스가 OFF 상태이므로 로그인할 수 없습니다.'),
                                     actions: <Widget>[
-                                      // usually buttons at the bottom of the dialog
                                       new FlatButton(
-                                        child: new Text("Close"),
+                                        child: new Text('Close'),
                                         onPressed: () {
                                           Navigator.of(context).pop();
                                         },
@@ -209,6 +214,29 @@ class _LoginState extends State<LoginPage> {
                                 },
                               );
 
+                              return;
+                            }
+
+                            if(isvalid){
+                              await Navigator.pushReplacementNamed(context, '/home');
+
+                            }else{
+                              await showDialog(
+                                context: context,
+                                builder: (BuildContext context) {
+                                  return AlertDialog(
+                                    content: new Text('존재하지 않는 User ID 이거나 Password 가 잘못되었습니다.'),
+                                    actions: <Widget>[
+                                      new FlatButton(
+                                        child: new Text('Close'),
+                                        onPressed: () {
+                                          Navigator.of(context).pop();
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
                             }
                           }
 
@@ -246,7 +274,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   // multiple
   var multiplelist = List<CrawlItem>();
   var filelists = List<File>();
-  var targetFileName = "<not selected>";
+  var targetFileName = '<not selected>';
 
   // single
   var singlelist = List<CrawlItem>();
@@ -256,59 +284,88 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   TextEditingController urlInputController;
   TextEditingController noInputController;
 
+  var isServing = true;
+
+  Timer _timer;
 
   @override
   void initState() {
     urlInputController = TextEditingController();
     noInputController = TextEditingController();
-    super.initState();
 
     refreshTargetList();
+    serviceCheck();
 
-//    print("==================");
-//    var test = getSortingOrder().then((_) => print(_));
-//    setSortingOrder("lala");
-//    print("==================");
-
+    super.initState();
   }
 
   @override
   void dispose() {
     urlInputController.dispose();
     noInputController.dispose();
+    _timer.cancel();
     super.dispose();
   }
 
-  Future<String> getSortingOrder() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
+  void serviceCheck() {
+    _timer = new Timer.periodic(Duration(seconds: 5), (timer) async {
+      var isservice = await SessionManager.isService();
+      setState(() {
+        isServing = isservice;
+      });
 
-    return prefs.getString("hehe") ?? 'name';
+      if(isservice) {
+        disableAction();
+      }else{
+        enableAction();
+      }
+    });
   }
 
-  /// ----------------------------------------------------------
-  /// Method that saves the user decision on sorting order
-  /// ----------------------------------------------------------
-  Future<bool> setSortingOrder(String value) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    return prefs.setString("hehe", value);
-  }
+//  Future<String> getSortingOrder() async {
+//    final SharedPreferences prefs = await SharedPreferences.getInstance();
+//
+//    return prefs.getString('hehe') ?? 'name';
+//  }
+//
+//  /// ----------------------------------------------------------
+//  /// Method that saves the user decision on sorting order
+//  /// ----------------------------------------------------------
+//  Future<bool> setSortingOrder(String value) async {
+//    final SharedPreferences prefs = await SharedPreferences.getInstance();
+//
+//    return prefs.setString('hehe', value);
+//  }
 
 
   @override
   Widget build(BuildContext context) {
-
     return MaterialApp(
-      title: "amazonc app",
+      debugShowCheckedModeBanner: false,
+      title: 'amazonc app',
       home: DefaultTabController(
         length: 2,
         child: Scaffold(
           appBar: AppBar(
             title: Text('amazon crawl'),
+            actions: <Widget>[
+              Center(
+                child: Text(isServing ? 'service ON' : 'service OFF'),
+              ),
+              FlatButton.icon(
+                icon: Icon(Icons.arrow_forward),
+                label: Text('logout'), //`Text` to display
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, '/login');
+                  //Code to execute when Floating Action Button is clicked
+                  //...
+                },
+              ),
+            ],
             bottom: TabBar(
               unselectedLabelColor: Colors.white.withOpacity(0.3),
               tabs: [
-                Tab(text: "excel"),
+                Tab(text: 'excel'),
                 Tab(text: 'url'),
               ],
             ),
@@ -345,7 +402,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                   ),
                                 ),
                                 new RaisedButton(
-                                    child: Text("refresh"),
+                                    child: Text('refresh'),
                                     onPressed: refreshTargetList
                                 ),
                               ],
@@ -370,7 +427,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                                 Expanded(
                                                   child: Text(multiplelist[index].no),
                                                 ),
-                                                Text("->     "),
+                                                Text('->     '),
                                                 Expanded(
                                                   child: Text(multiplelist[index].state),
                                                 )
@@ -381,8 +438,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
                                   ),
                                   RaisedButton(
-                                      child: Text("crawl"),
-                                      onPressed: () async {
+                                      child: Text('crawl'),
+                                      onPressed: isDisableAction ? null : () async {
                                         await crawlingMultiple();
                                       }),
                                 ],
@@ -433,6 +490,11 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                             RaisedButton(
                               child: const Text('Image Crawl'),
                               onPressed: isDisableAction ? null : () async {
+                                var isservice = SessionManager.isService();
+                                if(isservice == false){
+                                  return;
+                                }
+
                                 if(singleFormKey.currentState.validate()){
                                   setState(() {
                                     singlelist.clear();
@@ -461,7 +523,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 Expanded(
                                   child: Text(singlelist[index].no),
                                 ),
-                                Text("->     "),
+                                Text('->     '),
                                 Expanded(
                                   child: Text(singlelist[index].state),
                                 )
@@ -489,10 +551,10 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
 
-  crawlingSingle() async {
-    print("===== crawling (single) =====");
+  void crawlingSingle() async {
+    print('===== crawling (single) =====');
     if(singlelist == null || singlelist.length == 0){
-      print("** no queue");
+      print('** no queue');
       return;
     }
 
@@ -512,10 +574,10 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     enableAction();
   }
 
-  crawlingMultiple() async {
-    print("===== crawling (multiple) =====");
+  void crawlingMultiple() async {
+    print('===== crawling (multiple) =====');
     if(multiplelist == null || multiplelist.length == 0){
-      print("** no queue");
+      print('** no queue');
       return;
     }
 
@@ -537,35 +599,35 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
   crawling(CrawlItem item) async {
-    print("= crawling start =");
+    print('= crawling start =');
 
 //    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
 //    var url = "https://www.amazon.com/Fotodiox-Lens-Mount-Adapter-Mirrorless/dp/B00VTZ1J9Q?ref_=ast_slp_dp";
     var url = item.url;
     List<String> urls;
 
-    print("= url : " + url);
+    print('= url : ' + url);
     await http.read(url).then((contents) {
-      print("= url fetched =");
+      print('= url fetched =');
       urls = inspect2(contents);
-      print("= content parsed =");
+      print('= content parsed =');
     });
-    print("= image count : ${urls != null ? urls.length : 0}");
+    print('= image count : ${urls != null ? urls.length : 0}');
 
     await downloadAll(item, urls);
 
-    print("= crawling end =");
+    print('= crawling end =');
   }
 
   downloadAll(CrawlItem item, List<String> urls) async {
-    print("= download start =");
+    print('= download start =');
     String prefix = abspath;
     await Directory(prefix + '/' + item.no).create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
         await download(urls[i], '${dir.path}/${item.no}-${i+1}.jpg');
       }
     });
-    print("= download end =");
+    print('= download end =');
   }
 
   download(url, savefile) async {
@@ -633,7 +695,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     List contents = dir.listSync();
     for (var fileOrDir in contents) {
       if (fileOrDir is File) {
-        if(fileOrDir.path.endsWith(".xlsx") || fileOrDir.path.endsWith(".xls")){
+        if(fileOrDir.path.endsWith('.xlsx') || fileOrDir.path.endsWith('.xls')){
           print(fileOrDir.path);
           list.add(fileOrDir);
         }
@@ -662,7 +724,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     var sheetname = decoder.tables.keys.first;
     var table = decoder.tables[sheetname];
 
-    var exp =  new RegExp(r"^https?://.*$");
+    var exp =  new RegExp(r'^https?://.*$');
     for(var values in table.rows){
       if(values[1] == null || !exp.hasMatch(values[1]))
         continue;
@@ -678,7 +740,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   void multipleCrawlingReset() {
     setState(() {
       multiplelist.clear();
-      targetFileName = "<not selected>";
+      targetFileName = '<not selected>';
     });
 
   }
