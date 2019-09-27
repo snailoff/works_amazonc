@@ -313,9 +313,9 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
       });
 
       if(isservice) {
-        disableAction();
-      }else{
         enableAction();
+      }else{
+        disableAction();
       }
     });
   }
