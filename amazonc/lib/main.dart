@@ -85,7 +85,8 @@ class MyApp extends StatelessWidget {
           // See https://github.com/flutter/flutter/wiki/Desktop-shells#fonts
           fontFamily: 'Roboto',
         ),
-      home: LoginPage(),
+//      home: LoginPage(),
+        home: CrawlPage(),
       routes: {
         "/login": (_) => new LoginPage(),
         "/home": (_) => new CrawlPage(),
@@ -230,11 +231,14 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   // multiple
   var multiplelist = List<CrawlItem>();
   var filelists = List<File>();
+
   var targetFileName = '<not selected>';
+  var targetTotal = 0;
+  var targetProgressed = 0;
 
   // single
   var singlelist = List<CrawlItem>();
-  var isDisableAction = false;
+  var isEnableAction = true;
   final singleFormKey = GlobalKey<FormState>();
 
   TextEditingController urlInputController;
@@ -269,12 +273,6 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
       setState(() {
         isServing = isservice;
       });
-
-      if(isservice) {
-        enableAction();
-      }else{
-        disableAction();
-      }
     });
   }
 
@@ -359,7 +357,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 ),
                                 new RaisedButton(
                                     child: Text('refresh'),
-                                    onPressed: refreshTargetList
+                                    onPressed: isServing && isEnableAction ? () => refreshTargetList : null
                                 ),
                               ],
                             ),
@@ -370,12 +368,18 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 children: <Widget>[
                                   Row(
                                     children: <Widget>[
-                                      Text(targetFileName),
+                                      Expanded(
+                                        child: Text(targetFileName),
+                                      ),
+                                      Expanded(
+                                        child: Text(targetTotal != 0 ? '${targetProgressed} / ${targetTotal}' : '')
+                                      )
                                     ],
                                   ),
+                                  Padding(
+                                      padding: EdgeInsets.all(10.0)),
                                   Expanded(
-                                      child:
-                                      ListView.builder(
+                                      child: ListView.builder(
                                           itemCount: multiplelist.length,
                                           itemBuilder: (BuildContext ctxt, int index) {
                                             return Row(
@@ -383,9 +387,14 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                                 Expanded(
                                                   child: Text(multiplelist[index].no),
                                                 ),
-                                                Text('->     '),
+                                                Expanded(
+                                                  child: Text('->     '),
+                                                ),
                                                 Expanded(
                                                   child: Text(multiplelist[index].state),
+                                                ),
+                                                Expanded(
+                                                  child: Text(multiplelist[index].imageCount != 0 ? '(${multiplelist[index].crawlCount} / ${multiplelist[index].imageCount})' : '-')
                                                 )
                                               ],
                                             );
@@ -395,9 +404,10 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                   ),
                                   RaisedButton(
                                       child: Text('crawl'),
-                                      onPressed: isDisableAction ? null : () async {
+                                      onPressed: isServing && isEnableAction ? () async {
                                         await crawlingMultiple();
-                                      }),
+                                        enableAction();
+                                      } : null),
                                 ],
                               )
                           )
@@ -441,11 +451,11 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                           children: [
                             RaisedButton(
                               child: const Text('Reset'),
-                              onPressed: isDisableAction ? null : singleCrawlingReset,
+                              onPressed: isServing && isEnableAction ? singleCrawlingReset : null,
                             ),
                             RaisedButton(
                               child: const Text('Image Crawl'),
-                              onPressed: isDisableAction ? null : () async {
+                              onPressed: isServing && isEnableAction ? () async {
                                 var isservice = SessionManager.isService();
                                 if(isservice == false){
                                   return;
@@ -461,7 +471,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
                                 }
 
-                              },
+                              } : null,
                             ),
                           ],
                         ),
@@ -469,8 +479,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                     ),
                   ),
                   Expanded(
-                      child:
-                      ListView.builder
+                      child: ListView.builder
                         (
                           itemCount: singlelist.length,
                           itemBuilder: (BuildContext ctxt, int index) {
@@ -482,7 +491,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 Text('->     '),
                                 Expanded(
                                   child: Text(singlelist[index].state),
-                                )
+                                ),
+                                Text('(${singlelist[index].imageCount} / ${singlelist[index].crawlCount})')
                               ],
 
                             );
@@ -530,17 +540,26 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     enableAction();
   }
 
-  void crawlingMultiple() async {
+  Future crawlingMultiple() async {
+
+    setState(() {
+      targetProgressed = 0;
+      targetTotal = jobCountChecking(multiplelist);
+    });
+
+    disableAction();
+
     print('===== crawling (multiple) =====');
     if(multiplelist == null || multiplelist.length == 0){
       print('** no queue');
       return;
     }
 
-    disableAction();
-
     for(var item in multiplelist){
       try{
+        if(item.state == CrawlState.Completed)
+          continue;
+
         multipleStateChanging(item, CrawlState.Crawling);
         await crawling(item);
         multipleStateChanging(item, CrawlState.Completed);
@@ -550,18 +569,13 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
         print('excdeption!!! - ${e.toString()}');
       }
 
-      await sleep();
+      setState(() {
+        targetProgressed += 1;
+      });
     }
 
-    enableAction();
   }
 
-
-  var rand = Random();
-  Future sleep() {
-    var next = 1000 + rand.nextInt(1000);
-    return new Future.delayed(Duration(milliseconds: next), () => '1');
-  }
 
   void crawling(CrawlItem item) async {
     print('= crawling start =');
@@ -580,7 +594,10 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
         urls = inspect2(contents);
         print('= content parsed =');
       });
-      print('= image count : ${urls != null ? urls.length : 0}');
+
+      var count = urls != null ? urls.length : 0;
+      multipleImagecountChanging(item, count);
+      print('= image count : ${count}');
 
       await downloadAll(item, urls);
     }
@@ -591,15 +608,21 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     print('= download start =');
     await Directory(abspath + '/' + item.no).create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
-        await download(urls[i], '${dir.path}/${item.no}-${i+1}.jpg');
+        var savefile = '${dir.path}/${item.no}-${i+1}.jpg';
+        await download(urls[i], savefile);
+        if(File(savefile).existsSync()){
+          multipleCrawlcountAdding(item);
+
+        }
+        await Util.sleep();
       }
     });
     print('= download end =');
   }
 
   Future download(url, savefile) async {
-    await http.get(url).then((response) {
-      File(savefile).writeAsBytes(response.bodyBytes);
+    await http.get(url).then((response) async {
+      await File(savefile).writeAsBytes(response.bodyBytes);
       print('downloaded - ' + savefile);
     });
   }
@@ -619,7 +642,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     return rs;
   }
 
-  singleStateChanging(CrawlItem item, String state){
+  void singleStateChanging(CrawlItem item, String state){
     for(var c in singlelist){
       if(c.no == item.no){
         setState(() {
@@ -629,7 +652,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     }
   }
 
-  multipleStateChanging(CrawlItem item, String state){
+  void multipleStateChanging(CrawlItem item, String state){
     for(var c in multiplelist){
       if(c.no == item.no){
         setState(() {
@@ -639,14 +662,34 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     }
   }
 
+  void multipleImagecountChanging(CrawlItem item, int count){
+    for(var c in multiplelist){
+      if(c.no == item.no){
+        setState(() {
+          c.imageCount = count;
+        });
+      }
+    }
+  }
+
+  void multipleCrawlcountAdding(CrawlItem item){
+    for(var c in multiplelist){
+      if(c.no == item.no){
+        setState(() {
+          c.crawlCount += 1;
+        });
+      }
+    }
+  }
+
   disableAction() {
     setState(() {
-      isDisableAction = true;
+      isEnableAction = false;
     });
   }
   enableAction() {
     setState(() {
-      isDisableAction = false;
+      isEnableAction = true;
     });
   }
 
@@ -656,7 +699,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     var list = List<File>();
 
     var dir = Directory(abspath);
-    if(dir.exists() == false)
+    if(dir.existsSync() == false)
       return;
 
     List contents = dir.listSync();
@@ -681,6 +724,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     setState(() {
       multiplelist.clear();
       targetFileName = basename(file.path);
+      targetTotal = 0;
+      targetProgressed = 0;
     });
 
     var bytes = file.readAsBytesSync();
@@ -692,15 +737,32 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     var table = decoder.tables[sheetname];
 
     var exp =  new RegExp(r'^https?://.*$');
+    var list = new List<CrawlItem>();
     for(var values in table.rows){
       if(values[1] == null || !exp.hasMatch(values[1]))
         continue;
       var item = CrawlItem(values[0].toString(), values[1]);
 
       setState(() {
-        multiplelist.add(item);
+        list.add(item);
       });
     }
+
+    setState(() {
+      multiplelist = list;
+      targetTotal = jobCountChecking(list);
+    });
+  }
+
+  int jobCountChecking(List<CrawlItem> list){
+    int count = 0;
+    for(var item in list){
+      if(item.state == CrawlState.Completed)
+        continue;
+      count++;
+    }
+
+    return count;
   }
 
 
@@ -708,6 +770,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     setState(() {
       multiplelist.clear();
       targetFileName = '<not selected>';
+      targetTotal = 0;
+      targetProgressed = 0;
     });
 
   }
@@ -758,6 +822,13 @@ class SessionManager {
 
 
 class Util {
+  static var rand = Random();
+
+  static Future sleep() {
+    var next = 1000 + rand.nextInt(1000);
+    return new Future.delayed(Duration(milliseconds: next), () => '1');
+  }
+
   static void showAlertDialog(BuildContext context, String message) {
     Widget okButton = FlatButton(
       autofocus: true,
@@ -791,8 +862,8 @@ class CrawlItem {
   String no;
   String url;
 
-  int imageCount;
-  int crawlCount;
+  int imageCount = 0;
+  int crawlCount = 0;
 
   String state = CrawlState.Ready;
 
