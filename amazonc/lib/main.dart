@@ -14,6 +14,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart'
     show debugDefaultTargetPlatformOverride;
@@ -43,18 +44,17 @@ void main() {
   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
 
   var workdir = new Directory(abspath);
-  workdir.exists().then((isthere){
-    if(isthere == false){
-        workdir.create().then((_) {
-          runApp(new MyApp());
-        }).catchError((_){
-          runApp(new INeedWorkdir());
-        });
-    }else{
-      runApp(new MyApp());
-    }
-  });
+  if(workdir.existsSync()){
+    runApp(new MyApp());
 
+  }else{
+    workdir.create().then((_) {
+      runApp(new MyApp());
+    }).catchError((_){
+      runApp(new INeedWorkdir());
+    });
+
+  }
 }
 
 class INeedWorkdir extends StatelessWidget {
@@ -94,35 +94,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class SessionManager {
-  static Future<bool> isService() async {
-    final connection = await sql.MySqlConnection.connect(settings);
-    var results = await connection.query("select is_service from amazonc_setting limit 1");
-    bool result = false;
-
-    if(results != null && results.length == 1 && results.first[0] == 1){
-      result = true;
-    }
-
-    await connection.close();
-    return result;
-  }
-
-  static Future<bool> isValidUser(userid, passwd) async {
-    final connection = await sql.MySqlConnection.connect(settings);
-    print("userid: ${userid}, password: ${passwd}");
-    var results = await connection.query("select passwd=password('${passwd}') from amazonc_user where userid='${userid}'");
-    bool result = false;
-
-    if(results != null && results.length == 1 && results.first[0] == 1) {
-      result = true;
-    }
-
-    await connection.close();
-    return result;
-  }
-
-}
 
 class LoginPage extends StatefulWidget {
   @override
@@ -135,10 +106,19 @@ class _LoginState extends State<LoginPage> {
 
   final loginFormKey = GlobalKey<FormState>();
 
+  FocusNode focusPasswd;
+
+  void listener(v){
+    print(v);
+
+  }
+
   @override
   void initState() {
     useridInputController = TextEditingController();
+//    useridInputController.addListener(listener);
     passwdInputController = TextEditingController();
+    focusPasswd = FocusNode();
     super.initState();
   }
 
@@ -146,9 +126,9 @@ class _LoginState extends State<LoginPage> {
   void dispose() {
     useridInputController.dispose();
     passwdInputController.dispose();
+    focusPasswd.dispose();
     super.dispose();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -161,86 +141,40 @@ class _LoginState extends State<LoginPage> {
           body: Padding(
               padding: EdgeInsets.all(10.0),
               child:
-                  Form(key: loginFormKey,
-                    child: Column(
+              Form(key: loginFormKey,
+                child: Column(
                       children: <Widget>[
                         TextFormField(
                           decoration: InputDecoration( labelText: 'User ID'),
                           controller: useridInputController,
+                          onFieldSubmitted: (term){
+                            FocusScope.of(context).requestFocus(focusPasswd);
+                          },
                           validator: (value) {
                             if (value.isEmpty) {
                               return 'User ID를 입력해주세요.';
                             }
                             return null;
                           },
+                          onTap: () => useridInputController.clear()
                         ),
                       TextFormField(
+                        focusNode: focusPasswd,
                         decoration: InputDecoration( labelText: 'PASSWORD'),
                         controller: passwdInputController,
                         obscureText: true,
+                        onFieldSubmitted: (term) => loginProcess(context),
                         validator: (value) {
                           if (value.isEmpty) {
                             return 'PASSWORD 를 입력해주세요.';
                           }
                           return null;
                         },
+                        onTap: () => passwdInputController.clear()
                       ),
                       RaisedButton(
-                        onPressed: () async {
-                          if(loginFormKey.currentState.validate()) {
-                            var isservice = await SessionManager.isService();
-                            var isvalid = await SessionManager.isValidUser(
-                                useridInputController != null ? useridInputController.text : '',
-                                passwdInputController != null ? passwdInputController.text : ''
-                            );
-
-                            if(isservice == false){
-                              await showDialog(
-                                context: context,
-                                builder: (BuildContext context) {
-                                  return AlertDialog(
-                                    content: new Text('서비스가 OFF 상태이므로 로그인할 수 없습니다.'),
-                                    actions: <Widget>[
-                                      new FlatButton(
-                                        child: new Text('Close'),
-                                        onPressed: () {
-                                          Navigator.of(context).pop();
-                                        },
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
-
-                              return;
-                            }
-
-                            if(isvalid){
-                              await Navigator.pushReplacementNamed(context, '/home');
-
-                            }else{
-                              await showDialog(
-                                context: context,
-                                builder: (BuildContext context) {
-                                  return AlertDialog(
-                                    content: new Text('존재하지 않는 User ID 이거나 Password 가 잘못되었습니다.'),
-                                    actions: <Widget>[
-                                      new FlatButton(
-                                        child: new Text('Close'),
-                                        onPressed: () {
-                                          Navigator.of(context).pop();
-                                        },
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
-                            }
-                          }
-
-                        },
+                        onPressed: () => loginProcess(context),
                         child: Text('login'),
-
                       ),
                     ],
                   )
@@ -248,9 +182,33 @@ class _LoginState extends State<LoginPage> {
 
           )
       ),
-
     );
   }
+
+  Future loginProcess(context) async {
+    if(loginFormKey.currentState.validate() == false) {
+      return;
+    }
+
+    var isservice = await SessionManager.isService();
+    var isvalid = await SessionManager.isValidUser(
+        useridInputController != null ? useridInputController.text : '',
+        passwdInputController != null ? passwdInputController.text : ''
+    );
+
+    if(isservice == false){
+      Util.showAlertDialog(context, '서비스가 OFF 상태이므로 로그인 할 수 없습니다');
+      return;
+    }
+
+    if(isvalid == false){
+      Util.showAlertDialog(context, '존재하지 않는 User ID 이거나 Password 가 잘못되었습니다.');
+      return;
+    }
+
+    await Navigator.pushReplacementNamed(context, '/home');
+  }
+
 
 }
 
@@ -582,7 +540,6 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     disableAction();
 
     for(var item in multiplelist){
-
       try{
         multipleStateChanging(item, CrawlState.Crawling);
         await crawling(item);
@@ -590,37 +547,49 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
       }
       on Exception catch(e){
         multipleStateChanging(item, CrawlState.Failed);
+        print('excdeption!!! - ${e.toString()}');
       }
+
+      await sleep();
     }
 
     enableAction();
   }
 
-  crawling(CrawlItem item) async {
+
+  var rand = Random();
+  Future sleep() {
+    var next = 1000 + rand.nextInt(1000);
+    return new Future.delayed(Duration(milliseconds: next), () => '1');
+  }
+
+  void crawling(CrawlItem item) async {
     print('= crawling start =');
+    print('= into : ${item.no} / ${item.url}');
 
-//    var url = "https://www.amazon.com/Fujifilm-X100F-APS-C-Digital-Camera-Silver/dp/B01N33CT3Z/ref=sr_1_1?crid=339RTF1LI5L74&keywords=fuji+xf100&qid=1567998672&s=gateway&sprefix=fuji+xf10%2Caps%2C465&sr=8-1";
-//    var url = "https://www.amazon.com/Fotodiox-Lens-Mount-Adapter-Mirrorless/dp/B00VTZ1J9Q?ref_=ast_slp_dp";
-    var url = item.url;
-    List<String> urls;
+    var dir = new Directory('${abspath}/${item.no}');
+    if(dir.existsSync()){
+      print('passed!');
 
-    print('= url : ' + url);
-    await http.read(url).then((contents) {
-      print('= url fetched =');
-      urls = inspect2(contents);
-      print('= content parsed =');
-    });
-    print('= image count : ${urls != null ? urls.length : 0}');
+    }else{
+      List<String> urls;
+      await http.read(item.url).then((contents) {
+        File('${abspath}/${item.no}.html').writeAsStringSync(contents);
 
-    await downloadAll(item, urls);
+        print('= url fetched =');
+        urls = inspect2(contents);
+        print('= content parsed =');
+      });
+      print('= image count : ${urls != null ? urls.length : 0}');
 
+      await downloadAll(item, urls);
+    }
     print('= crawling end =');
   }
 
-  downloadAll(CrawlItem item, List<String> urls) async {
+  Future downloadAll(CrawlItem item, List<String> urls) async {
     print('= download start =');
-    String prefix = abspath;
-    await Directory(prefix + '/' + item.no).create().then((Directory dir) async {
+    await Directory(abspath + '/' + item.no).create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
         await download(urls[i], '${dir.path}/${item.no}-${i+1}.jpg');
       }
@@ -628,7 +597,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     print('= download end =');
   }
 
-  download(url, savefile) async {
+  Future download(url, savefile) async {
     await http.get(url).then((response) {
       File(savefile).writeAsBytes(response.bodyBytes);
       print('downloaded - ' + savefile);
@@ -754,6 +723,69 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
 }
+
+
+
+class SessionManager {
+  static Future<bool> isService() async {
+    final connection = await sql.MySqlConnection.connect(settings);
+    var results = await connection.query("select is_service from amazonc_setting limit 1");
+    bool result = false;
+
+    if(results != null && results.length == 1 && results.first[0] == 1){
+      result = true;
+    }
+
+    await connection.close();
+    return result;
+  }
+
+  static Future<bool> isValidUser(userid, passwd) async {
+    final connection = await sql.MySqlConnection.connect(settings);
+    print("userid: ${userid}, password: ${passwd}");
+    var results = await connection.query("select passwd=password('${passwd}') from amazonc_user where userid='${userid}'");
+    bool result = false;
+
+    if(results != null && results.length == 1 && results.first[0] == 1) {
+      result = true;
+    }
+
+    await connection.close();
+    return result;
+  }
+
+}
+
+
+class Util {
+  static void showAlertDialog(BuildContext context, String message) {
+    Widget okButton = FlatButton(
+      autofocus: true,
+      child: Text("OK"),
+      onPressed: () {
+        Navigator.pop(context);
+      },
+    );
+
+    AlertDialog alert = AlertDialog(
+      title: Text('Alert'),
+      content: Text(message),
+      actions: [
+        okButton,
+      ],
+    );
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return alert;
+      },
+    );
+  }
+
+}
+
+
 
 class CrawlItem {
   String no;
