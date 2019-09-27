@@ -752,7 +752,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
       multiplelist.clear();
       targetFileName = basename(file.path);
       var now = new DateTime.now();
-      var formatter = new DateFormat('yyyyMMdd_Hm');
+      var formatter = new DateFormat('yyyyMMdd_Hmm');
       targetSavepath = formatter.format(now);
       targetTotal = 0;
       targetProgressed = 0;
