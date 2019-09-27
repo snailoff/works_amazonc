@@ -86,8 +86,7 @@ class MyApp extends StatelessWidget {
           // See https://github.com/flutter/flutter/wiki/Desktop-shells#fonts
           fontFamily: 'Roboto',
         ),
-//      home: LoginPage(),
-        home: CrawlPage(),
+      home: LoginPage(),
       routes: {
         "/login": (_) => new LoginPage(),
         "/home": (_) => new CrawlPage(),
@@ -611,7 +610,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
     List<String> urls;
     await http.read(item.url).then((contents) {
-      File('${abspath}/${item.no}.html').writeAsStringSync(contents);
+      //File('${abspath}/${item.no}.html').writeAsStringSync(contents);
 
       print('= url fetched =');
       urls = inspect2(contents);
