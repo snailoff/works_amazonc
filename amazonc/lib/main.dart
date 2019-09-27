@@ -357,7 +357,9 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 ),
                                 new RaisedButton(
                                     child: Text('refresh'),
-                                    onPressed: isServing && isEnableAction ? () => refreshTargetList : null
+                                    onPressed: isServing && isEnableAction ? () {
+                                      refreshTargetList();
+                                    } : null
                                 ),
                               ],
                             ),
@@ -562,11 +564,16 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
         multipleStateChanging(item, CrawlState.Crawling);
         await crawling(item);
-        multipleStateChanging(item, CrawlState.Completed);
+
+        if(item.imageCount == item.crawlCount && item.imageCount != 0){
+          multipleStateChanging(item, CrawlState.Completed);
+        }else{
+          multipleStateChanging(item, CrawlState.Failed);
+        }
       }
       on Exception catch(e){
         multipleStateChanging(item, CrawlState.Failed);
-        print('excdeption!!! - ${e.toString()}');
+        print('exception!!! - ${e.toString()}');
       }
 
       setState(() {
@@ -584,35 +591,34 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     var dir = new Directory('${abspath}/${item.no}');
     if(dir.existsSync()){
       print('passed!');
-
-    }else{
-      List<String> urls;
-      await http.read(item.url).then((contents) {
-        File('${abspath}/${item.no}.html').writeAsStringSync(contents);
-
-        print('= url fetched =');
-        urls = inspect2(contents);
-        print('= content parsed =');
-      });
-
-      var count = urls != null ? urls.length : 0;
-      multipleImagecountChanging(item, count);
-      print('= image count : ${count}');
-
-      await downloadAll(item, urls);
+      return;
     }
+
+    List<String> urls;
+    await http.read(item.url).then((contents) {
+      File('${abspath}/${item.no}.html').writeAsStringSync(contents);
+
+      print('= url fetched =');
+      urls = inspect2(contents);
+      print('= content parsed =');
+    });
+
+    var count = urls != null ? urls.length : 0;
+    multipleImagecountChanging(item, count);
+    print('= image count : ${count}');
+
+    await downloadItem(item, urls);
     print('= crawling end =');
   }
 
-  Future downloadAll(CrawlItem item, List<String> urls) async {
+  Future downloadItem(CrawlItem item, List<String> urls) async {
     print('= download start =');
     await Directory(abspath + '/' + item.no).create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
         var savefile = '${dir.path}/${item.no}-${i+1}.jpg';
-        await download(urls[i], savefile);
+        await downloadImage(urls[i], savefile);
         if(File(savefile).existsSync()){
           multipleCrawlcountAdding(item);
-
         }
         await Util.sleep();
       }
@@ -620,7 +626,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     print('= download end =');
   }
 
-  Future download(url, savefile) async {
+  Future downloadImage(url, savefile) async {
     await http.get(url).then((response) async {
       await File(savefile).writeAsBytes(response.bodyBytes);
       print('downloaded - ' + savefile);
@@ -694,7 +700,12 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
   void refreshTargetList(){
-    multipleCrawlingReset();
+    setState(() {
+      multiplelist.clear();
+      targetFileName = '<not selected>';
+      targetTotal = 0;
+      targetProgressed = 0;
+    });
 
     var list = List<File>();
 
@@ -767,12 +778,6 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
 
   void multipleCrawlingReset() {
-    setState(() {
-      multiplelist.clear();
-      targetFileName = '<not selected>';
-      targetTotal = 0;
-      targetProgressed = 0;
-    });
 
   }
 
