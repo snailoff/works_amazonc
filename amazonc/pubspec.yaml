@@ -19,6 +19,7 @@ dependencies:
   mysql1: ^0.17.0+1
   spreadsheet_decoder: ^1.0.1
   shared_preferences: ^0.4.2
+  intl: ^0.16.0
 
 
 dev_dependencies:

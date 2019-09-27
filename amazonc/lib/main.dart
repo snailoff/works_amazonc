@@ -25,7 +25,8 @@ import 'package:http/http.dart' as http;
 import 'package:mysql1/mysql1.dart' as sql;
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 import 'package:path/path.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+//import 'package:shared_preferences/shared_preferences.dart';
 
 var settings = new sql.ConnectionSettings(
   host: 'jobbot.co.kr',
@@ -235,6 +236,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   var targetFileName = '<not selected>';
   var targetTotal = 0;
   var targetProgressed = 0;
+  var targetSavepath = '';
 
   // single
   var singlelist = List<CrawlItem>();
@@ -339,6 +341,12 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(child: Text(abspath)),
+                                  ],
+                                ),
+                                Padding(padding: EdgeInsets.all(10.0)),
                                 Container(
                                   child: Expanded(
                                       child: ListView.builder(
@@ -370,16 +378,23 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 children: <Widget>[
                                   Row(
                                     children: <Widget>[
-                                      Expanded(
-                                        child: Text(targetFileName),
-                                      ),
-                                      Expanded(
-                                        child: Text(targetTotal != 0 ? '${targetProgressed} / ${targetTotal}' : '')
-                                      )
+                                      Expanded(child: Text('Load File')),
+                                      Expanded(child: Text(targetFileName)),
                                     ],
                                   ),
-                                  Padding(
-                                      padding: EdgeInsets.all(10.0)),
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(child: Text('Save Path')),
+                                      Expanded(child: Text('${targetSavepath}')),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(child: Text('Progress')),
+                                      Expanded(child: Text(targetTotal != 0 ? '${targetProgressed} / ${targetTotal}' : '')),
+                                    ],
+                                  ),
+                                  Padding(padding: EdgeInsets.all(10.0)),
                                   Expanded(
                                       child: ListView.builder(
                                           itemCount: multiplelist.length,
@@ -396,7 +411,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                                   child: Text(multiplelist[index].state),
                                                 ),
                                                 Expanded(
-                                                  child: Text(multiplelist[index].imageCount != 0 ? '(${multiplelist[index].crawlCount} / ${multiplelist[index].imageCount})' : '-')
+                                                  child: Text(multiplelist[index].imageCount != 0 ? '(${multiplelist[index].crawlCount} / ${multiplelist[index].imageCount})' : '')
                                                 )
                                               ],
                                             );
@@ -588,11 +603,11 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     print('= crawling start =');
     print('= into : ${item.no} / ${item.url}');
 
-    var dir = new Directory('${abspath}/${item.no}');
-    if(dir.existsSync()){
-      print('passed!');
-      return;
-    }
+//    var dir = new Directory('${abspath}/${item.no}');
+//    if(dir.existsSync()){
+//      print('passed!');
+//      return;
+//    }
 
     List<String> urls;
     await http.read(item.url).then((contents) {
@@ -613,7 +628,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
   Future downloadItem(CrawlItem item, List<String> urls) async {
     print('= download start =');
-    await Directory(abspath + '/' + item.no).create().then((Directory dir) async {
+    await Directory('${abspath}/${targetSavepath}').create().then((Directory dir) async {
       for(var i=0; i<urls.length; i++){
         var savefile = '${dir.path}/${item.no}-${i+1}.jpg';
         await downloadImage(urls[i], savefile);
@@ -703,6 +718,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     setState(() {
       multiplelist.clear();
       targetFileName = '<not selected>';
+      targetSavepath = '';
       targetTotal = 0;
       targetProgressed = 0;
     });
@@ -735,6 +751,9 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     setState(() {
       multiplelist.clear();
       targetFileName = basename(file.path);
+      var now = new DateTime.now();
+      var formatter = new DateFormat('yyyyMMdd_Hm');
+      targetSavepath = formatter.format(now);
       targetTotal = 0;
       targetProgressed = 0;
     });
