@@ -755,7 +755,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
       }
     });
     print('= download end =');
-    await Util.sleep(((5-item.retryCount) * 2) * 1000);
+    await Util.sleep(((10-item.retryCount) * 2) * 1000);
   }
 
   Future downloadImage(url, savefile) async {
@@ -1021,7 +1021,7 @@ class CrawlItem {
 
   int imageCount = 0;
   int crawlCount = 0;
-  int retryCount = 5;
+  int retryCount = 10;
 
   String state = CrawlState.Ready;
 
