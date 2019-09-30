@@ -396,26 +396,28 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                   ),
                                   Padding(padding: EdgeInsets.all(10.0)),
                                   Expanded(
-                                      child: ListView.builder(
-                                          itemCount: multiplelist.length,
-                                          itemBuilder: (BuildContext ctxt, int index) {
-                                            return Row(
-                                              children: <Widget>[
-                                                Expanded(
-                                                  child: Text(multiplelist[index].no),
-                                                ),
-                                                Expanded(
-                                                  child: Text('->     '),
-                                                ),
-                                                Expanded(
-                                                  child: Text(multiplelist[index].state),
-                                                ),
-                                                Expanded(
-                                                  child: Text(multiplelist[index].imageCount != 0 ? '(${multiplelist[index].crawlCount} / ${multiplelist[index].imageCount})' : '')
-                                                )
-                                              ],
-                                            );
-                                          }
+                                      child: Scrollbar(
+                                        child: ListView.builder(
+                                            itemCount: multiplelist.length,
+                                            itemBuilder: (BuildContext ctxt, int index) {
+                                              return Row(
+                                                children: <Widget>[
+                                                  Expanded(
+                                                    child: Text('${index+1}. ${multiplelist[index].no}'),
+                                                  ),
+                                                  Expanded(
+                                                    child: Text('->     '),
+                                                  ),
+                                                  Expanded(
+                                                    child: Text(multiplelist[index].state),
+                                                  ),
+                                                  Expanded(
+                                                      child: Text(multiplelist[index].imageCount != 0 ? '(${multiplelist[index].crawlCount} / ${multiplelist[index].imageCount})' : '')
+                                                  )
+                                                ],
+                                              );
+                                            }
+                                        )
                                       )
 
                                   ),
