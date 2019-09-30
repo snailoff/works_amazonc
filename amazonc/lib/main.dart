@@ -452,6 +452,13 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                             }
                             return null;
                           },
+                          onFieldSubmitted: (term) async {
+                            var data = await Clipboard.getData('text/plain');
+                            if(data.text.startsWith('http')){
+                              urlInputController.text = data.text;
+                            }
+                          },
+                          onTap: () => noInputController.clear()
                         ),
                         Row(
                           children: <Widget>[
@@ -467,47 +474,61 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 },
                               ),
                             ),
-                              SizedBox(
-                                width: 200,
+                            SizedBox(
+                                width: 70,
                                 child: RaisedButton(
-                                    child: Text('paste from clipboard'),
-                                    onPressed:() async {
-                                      var data = await Clipboard.getData('text/plain');
-                                      urlInputController.text = data.text;
-                                    }
+                                    child: Text('clear'),
+                                    onPressed: isServing && isEnableAction ? () {
+                                      urlInputController.clear();
+                                    } : null
                                 )
+                            ),
+                            Padding(
+                              padding: EdgeInsets.all(5.0),
+                            ),
+                            SizedBox(
+                              width: 70,
+                              child: RaisedButton(
+                                  child: Text('paste'),
+                                  onPressed: isServing && isEnableAction ? () async {
+                                    var data = await Clipboard.getData('text/plain');
+                                    urlInputController.text = data.text;
+                                  } : null
                               )
+                            )
                           ],
                         ),
-                        ButtonBar(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            RaisedButton(
-                              child: const Text('Reset'),
-                              onPressed: isServing && isEnableAction ? singleCrawlingReset : null,
-                            ),
-                            RaisedButton(
-                              child: const Text('Image Crawl'),
-                              onPressed: isServing && isEnableAction ? () async {
-                                var isservice = SessionManager.isService();
-                                if(isservice == false){
-                                  return;
-                                }
 
-                                if(singleFormKey.currentState.validate()){
-                                  setState(() {
-                                    singlelist.clear();
-                                    var item = CrawlItem(noInputController.text, urlInputController.text);
-                                    singlelist.add(item);
-                                  });
-                                  await crawlingSingle();
-
-                                }
-
-                              } : null,
-                            ),
-                          ],
+                        Padding(
+                          padding: EdgeInsets.all(10.0),
                         ),
+
+                        Center(
+                          child: ButtonBar(
+                            children: [
+                              RaisedButton(
+                                child: const Text('Image Crawl'),
+                                onPressed: isServing && isEnableAction ? () async {
+                                  var isservice = SessionManager.isService();
+                                  if(isservice == false){
+                                    return;
+                                  }
+
+                                  if(singleFormKey.currentState.validate()){
+                                    setState(() {
+                                      singlelist.clear();
+                                      var item = CrawlItem(noInputController.text, urlInputController.text);
+                                      singlelist.add(item);
+                                    });
+                                    await crawlingSingle();
+
+                                  }
+
+                                } : null,
+                              ),
+                            ],
+                          ),
+                        )
                       ],
                     ),
                   ),
@@ -561,13 +582,17 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
     var item = singlelist.first;
     try{
-      singleStateChanging(item, CrawlState.Crawling);
+      stateChanging(item, CrawlState.Crawling);
       await crawling(item);
-      singleStateChanging(item, CrawlState.Completed);
+      if(item.imageCount == item.crawlCount && item.imageCount != 0){
+        stateChanging(item, CrawlState.Completed);
+      }else{
+        stateChanging(item, CrawlState.Failed);
+      }
 
     }
     on Exception catch(e){
-      singleStateChanging(item, CrawlState.Failed);
+      stateChanging(item, CrawlState.Failed);
     }
 
     enableAction();
@@ -593,17 +618,17 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
         if(item.state == CrawlState.Completed)
           continue;
 
-        multipleStateChanging(item, CrawlState.Crawling);
+        stateChanging(item, CrawlState.Crawling);
         await crawling(item);
 
         if(item.imageCount == item.crawlCount && item.imageCount != 0){
-          multipleStateChanging(item, CrawlState.Completed);
+          stateChanging(item, CrawlState.Completed);
         }else{
-          multipleStateChanging(item, CrawlState.Failed);
+          stateChanging(item, CrawlState.Failed);
         }
       }
       on Exception catch(e){
-        multipleStateChanging(item, CrawlState.Failed);
+        stateChanging(item, CrawlState.Failed);
         print('exception!!! - ${e.toString()}');
       }
 
@@ -615,7 +640,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   }
 
 
-  void crawling(CrawlItem item) async {
+  Future crawling(CrawlItem item) async {
     print('= crawling start =');
     print('= into : ${item.no} / ${item.url}');
 
@@ -635,7 +660,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     });
 
     var count = urls != null ? urls.length : 0;
-    multipleImagecountChanging(item, count);
+    imagecountChanging(item, count);
     print('= image count : ${count}');
 
     await downloadItem(item, urls);
@@ -649,7 +674,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
         var savefile = '${dir.path}/${item.no}-${i+1}.jpg';
         await downloadImage(urls[i], savefile);
         if(File(savefile).existsSync()){
-          multipleCrawlcountAdding(item);
+          crawlcountAdding(item);
         }
         await Util.sleep();
       }
@@ -679,44 +704,21 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     return rs;
   }
 
-  void singleStateChanging(CrawlItem item, String state){
-    for(var c in singlelist){
-      if(c.no == item.no){
-        setState(() {
-          c.state = state;
-        });
-      }
-    }
+  void stateChanging(CrawlItem item, String state){
+    setState(() {
+      item.state = state;
+    });
+
   }
 
-  void multipleStateChanging(CrawlItem item, String state){
-    for(var c in multiplelist){
-      if(c.no == item.no){
-        setState(() {
-          c.state = state;
-        });
-      }
-    }
+  void imagecountChanging(CrawlItem item, int count){
+    item.imageCount = count;
   }
 
-  void multipleImagecountChanging(CrawlItem item, int count){
-    for(var c in multiplelist){
-      if(c.no == item.no){
-        setState(() {
-          c.imageCount = count;
-        });
-      }
-    }
-  }
-
-  void multipleCrawlcountAdding(CrawlItem item){
-    for(var c in multiplelist){
-      if(c.no == item.no){
-        setState(() {
-          c.crawlCount += 1;
-        });
-      }
-    }
+  void crawlcountAdding(CrawlItem item){
+    setState(() {
+      item.crawlCount += 1;
+    });
   }
 
   disableAction() {
@@ -815,54 +817,43 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   void multipleCrawlingReset() {
 
   }
-
-  void singleCrawlingReset() {
-    print("### single tapp!!");
-    noInputController.clear();
-    urlInputController.clear();
-
-    setState(() {
-      singlelist.clear();
-    });
-  }
-
 }
 
 
-class KeyboardListener extends StatefulWidget {
-  KeyboardListener();
-
-  @override
-  _RawKeyboardListenerState createState() => new _RawKeyboardListenerState();
-}
-
-class _RawKeyboardListenerState extends State<KeyboardListener> {
-  TextEditingController _controller = new TextEditingController();
-  FocusNode _textNode = new FocusNode();
-
-  @override
-  initState() {
-    super.initState();
-  }
-
-  handleKey(RawKeyEventDataAndroid key) {
-    print('KeyCode: ${key.keyCode}, CodePoint: ${key.codePoint}, '
-        'Flags: ${key.flags}, MetaState: ${key.metaState}, '
-        'ScanCode: ${key.scanCode}');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RawKeyboardListener(
-      focusNode: _textNode,
-      onKey: (key) => handleKey(key.data),
-      child: TextField(
-        controller: _controller,
-        focusNode: _textNode,
-      ),
-    );
-  }
-}
+//class KeyboardListener extends StatefulWidget {
+//  KeyboardListener();
+//
+//  @override
+//  _RawKeyboardListenerState createState() => new _RawKeyboardListenerState();
+//}
+//
+//class _RawKeyboardListenerState extends State<KeyboardListener> {
+//  TextEditingController _controller = new TextEditingController();
+//  FocusNode _textNode = new FocusNode();
+//
+//  @override
+//  initState() {
+//    super.initState();
+//  }
+//
+//  handleKey(RawKeyEventDataAndroid key) {
+//    print('KeyCode: ${key.keyCode}, CodePoint: ${key.codePoint}, '
+//        'Flags: ${key.flags}, MetaState: ${key.metaState}, '
+//        'ScanCode: ${key.scanCode}');
+//  }
+//
+//  @override
+//  Widget build(BuildContext context) {
+//    return RawKeyboardListener(
+//      focusNode: _textNode,
+//      onKey: (key) => handleKey(key.data),
+//      child: TextField(
+//        controller: _controller,
+//        focusNode: _textNode,
+//      ),
+//    );
+//  }
+//}
 
 
 
