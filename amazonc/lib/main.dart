@@ -41,6 +41,7 @@ var abspath = '/amazonc_download';
 //var abspath = '/amazonc';
 
 void main() {
+
   // See https://github.com/flutter/flutter/wiki/Desktop-shells#target-platform-override
   debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
 
@@ -452,15 +453,31 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                             return null;
                           },
                         ),
-                        TextFormField(
-                          decoration: InputDecoration( labelText: '아마존 상품페이지 URL'),
-                          controller: urlInputController,
-                          validator: (value) {
-                            if (value.isEmpty) {
-                              return 'URL을 입력해 주세요.';
-                            }
-                            return null;
-                          },
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: TextFormField(
+                                decoration: InputDecoration( labelText: '아마존 상품페이지 URL'),
+                                controller: urlInputController,
+                                validator: (value) {
+                                  if (value.isEmpty) {
+                                    return 'URL을 입력해 주세요.';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                              SizedBox(
+                                width: 200,
+                                child: RaisedButton(
+                                    child: Text('paste from clipboard'),
+                                    onPressed:() async {
+                                      var data = await Clipboard.getData('text/plain');
+                                      urlInputController.text = data.text;
+                                    }
+                                )
+                              )
+                          ],
                         ),
                         ButtonBar(
                           mainAxisSize: MainAxisSize.max,
@@ -809,6 +826,42 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     });
   }
 
+}
+
+
+class KeyboardListener extends StatefulWidget {
+  KeyboardListener();
+
+  @override
+  _RawKeyboardListenerState createState() => new _RawKeyboardListenerState();
+}
+
+class _RawKeyboardListenerState extends State<KeyboardListener> {
+  TextEditingController _controller = new TextEditingController();
+  FocusNode _textNode = new FocusNode();
+
+  @override
+  initState() {
+    super.initState();
+  }
+
+  handleKey(RawKeyEventDataAndroid key) {
+    print('KeyCode: ${key.keyCode}, CodePoint: ${key.codePoint}, '
+        'Flags: ${key.flags}, MetaState: ${key.metaState}, '
+        'ScanCode: ${key.scanCode}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawKeyboardListener(
+      focusNode: _textNode,
+      onKey: (key) => handleKey(key.data),
+      child: TextField(
+        controller: _controller,
+        focusNode: _textNode,
+      ),
+    );
+  }
 }
 
 
