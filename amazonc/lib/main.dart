@@ -229,14 +229,15 @@ class CrawlPage extends StatefulWidget {
 
 class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMixin {
 
-  // multiple
-  var multiplelist = List<CrawlItem>();
-  var filelists = List<File>();
-
   var targetFileName = '<not selected>';
   var targetTotal = 0;
   var targetProgressed = 0;
   var targetSavepath = '';
+  var isRetry = true;
+
+  // multiple
+  var multiplelist = List<CrawlItem>();
+  var filelists = List<File>();
 
   // single
   var singlelist = List<CrawlItem>();
@@ -337,7 +338,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                       Row(
                         mainAxisSize: MainAxisSize.max,
                         children: <Widget>[
-                          Flexible(
+                          SizedBox(
+                            width: 250,
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
                               children: <Widget>[
@@ -365,9 +367,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                 ),
                                 new RaisedButton(
                                     child: Text('refresh'),
-                                    onPressed: isServing && isEnableAction ? () {
-                                      refreshTargetList();
-                                    } : null
+                                    onPressed: isServing && isEnableAction ? () => refreshTargetList : null
                                 ),
                               ],
                             ),
@@ -406,13 +406,16 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                                     child: Text('${index+1}. ${multiplelist[index].no}'),
                                                   ),
                                                   Expanded(
-                                                    child: Text('->     '),
+                                                    child: Text('->  '),
                                                   ),
                                                   Expanded(
-                                                    child: Text(multiplelist[index].state),
+                                                    child: Text('${multiplelist[index].state}'),
                                                   ),
                                                   Expanded(
-                                                      child: Text(multiplelist[index].imageCount != 0 ? '(${multiplelist[index].crawlCount} / ${multiplelist[index].imageCount})' : '')
+                                                    child: Text(multiplelist[index].imageCount != 0 ? 'image(${multiplelist[index].crawlCount} / ${multiplelist[index].imageCount})' : '')
+                                                  ),
+                                                  Expanded(
+                                                    child: Text(multiplelist[index].state == CrawlState.Failed ? 'retry(${multiplelist[index].retryCount})' : '')
                                                   )
                                                 ],
                                               );
@@ -421,12 +424,31 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                       )
 
                                   ),
-                                  RaisedButton(
-                                      child: Text('crawl'),
-                                      onPressed: isServing && isEnableAction ? () async {
-                                        await crawlingMultiple();
-                                        enableAction();
-                                      } : null),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: <Widget>[
+                                      Expanded(
+                                        child:Row(
+                                          children: <Widget>[
+                                            Text('retry'),
+                                            Checkbox(value: isRetry, onChanged: (value) {
+                                              setState(() {
+                                                isRetry = value;
+                                              });
+                                            }),
+                                          ],
+                                        )
+                                      ),
+                                      Expanded(
+                                        child: RaisedButton(
+                                            child: Text('crawl'),
+                                            onPressed: isServing && isEnableAction ? () async {
+                                              await crawlingMultiple();
+                                            } : null),
+                                      )
+                                    ],
+
+                                  )
                                 ],
                               )
                           )
@@ -602,10 +624,6 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
 
   Future crawlingMultiple() async {
 
-    setState(() {
-      targetProgressed = 0;
-      targetTotal = jobCountChecking(multiplelist);
-    });
 
     disableAction();
 
@@ -615,29 +633,39 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
       return;
     }
 
-    for(var item in multiplelist){
-      try{
-        if(item.state == CrawlState.Completed)
-          continue;
-
-        stateChanging(item, CrawlState.Crawling);
-        await crawling(item);
-
-        if(item.imageCount == item.crawlCount && item.imageCount != 0){
-          stateChanging(item, CrawlState.Completed);
-        }else{
-          stateChanging(item, CrawlState.Failed);
-        }
-      }
-      on Exception catch(e){
-        stateChanging(item, CrawlState.Failed);
-        print('exception!!! - ${e.toString()}');
-      }
-
+    do{
       setState(() {
-        targetProgressed += 1;
+        targetProgressed = 0;
+        targetTotal = jobCountChecking(multiplelist);
       });
-    }
+
+      for(var item in multiplelist){
+        try{
+          if(item.state == CrawlState.Completed)
+            continue;
+
+          stateChanging(item, CrawlState.Crawling);
+          await crawling(item);
+
+          if(item.imageCount == item.crawlCount && item.imageCount != 0){
+            stateChanging(item, CrawlState.Completed);
+          }else{
+            stateChanging(item, CrawlState.Failed);
+          }
+        }
+        on Exception catch(e){
+          stateChanging(item, CrawlState.Failed);
+          print('exception!!! - ${e.toString()}');
+        }
+
+        setState(() {
+          targetProgressed += 1;
+        });
+      }
+
+    } while(isRetry && hasFailCount(multiplelist));
+
+    enableAction();
 
   }
 
@@ -709,6 +737,9 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   void stateChanging(CrawlItem item, String state){
     setState(() {
       item.state = state;
+      if(state == CrawlState.Failed){
+        item.retryCount--;
+      }
     });
 
   }
@@ -815,10 +846,17 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     return count;
   }
 
+  bool hasFailCount(List<CrawlItem> list){
+    for(var item in list){
+      if(item.state == CrawlState.Failed && item.retryCount > 0){
+        return true;
+      }
+    }
 
-  void multipleCrawlingReset() {
-
+    return false;
   }
+
+
 }
 
 
@@ -933,6 +971,7 @@ class CrawlItem {
 
   int imageCount = 0;
   int crawlCount = 0;
+  int retryCount = 5;
 
   String state = CrawlState.Ready;
 
