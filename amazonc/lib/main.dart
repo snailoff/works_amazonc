@@ -751,10 +751,11 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
         if(File(savefile).existsSync()){
           crawlcountAdding(item);
         }
-        await Util.sleep();
+        await Util.sleep(500);
       }
     });
     print('= download end =');
+    await Util.sleep((5-item.retryCount) * 1000);
   }
 
   Future downloadImage(url, savefile) async {
@@ -980,8 +981,8 @@ class SessionManager {
 class Util {
   static var rand = Random();
 
-  static Future sleep() {
-    var next = 1000 + rand.nextInt(1000);
+  static Future sleep(int t) {
+    var next = t + rand.nextInt(500);
     return new Future.delayed(Duration(milliseconds: next), () => '1');
   }
 
