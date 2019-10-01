@@ -118,7 +118,6 @@ class _LoginState extends State<LoginPage> {
   @override
   void initState() {
     useridInputController = TextEditingController();
-//    useridInputController.addListener(listener);
     passwdInputController = TextEditingController();
     focusPasswd = FocusNode();
     super.initState();
@@ -235,6 +234,9 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   var isRetry = true;
   var isServing = true;
 
+  TextEditingController startDelayController;
+  TextEditingController retryCountController;
+
   Timer _timer;
 
   // multiple
@@ -257,6 +259,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   void initState() {
     urlInputController = TextEditingController();
     noInputController = TextEditingController();
+    startDelayController = TextEditingController(text:'2');
+    retryCountController = TextEditingController(text:'5');
     focusSingleUrl = FocusNode();
 
     refreshTargetList();
@@ -269,6 +273,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   void dispose() {
     urlInputController.dispose();
     noInputController.dispose();
+    startDelayController.dispose();
+    retryCountController.dispose();
     focusSingleUrl.dispose();
     _timer.cancel();
     super.dispose();
@@ -426,22 +432,62 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                             }
                                         )
                                       )
-
                                   ),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: <Widget>[
                                       Expanded(
-                                        child:Row(
-                                          children: <Widget>[
-                                            Text('retry'),
-                                            Checkbox(value: isRetry, onChanged: (value) {
-                                              setState(() {
-                                                isRetry = value;
-                                              });
-                                            }),
-                                          ],
-                                        )
+                                          child:Row(
+                                            children: <Widget>[
+                                              Text('retry'),
+                                              Checkbox(value: isRetry, onChanged: (value) {
+                                                setState(() {
+                                                  isRetry = value;
+                                                });
+                                              }),
+                                            ],
+                                          )
+                                      ),
+                                      Expanded(
+                                          child:Row(
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text('retry count'),
+                                              ),
+                                              Expanded(
+                                                child: TextFormField(
+                                                  keyboardType: TextInputType.number,
+                                                  controller: retryCountController,
+                                                  onFieldSubmitted: (value) {
+                                                    if (value.isEmpty || !RegExp(r'^[0-9]+$').hasMatch(value)) {
+                                                      value = '3';
+                                                    }
+
+                                                  },
+                                                ),
+                                              )
+                                            ],
+                                          )
+                                      ),
+                                      Expanded(
+                                          child:Row(
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text('start delay'),
+                                              ),
+                                              Expanded(
+                                                child: TextFormField(
+                                                  keyboardType: TextInputType.number,
+                                                  controller: startDelayController,
+                                                  onFieldSubmitted: (value) {
+                                                    if (value.isEmpty || !RegExp(r'^[0-9]+$').hasMatch(value)) {
+                                                      value = '5';
+                                                    }
+                                                  },
+                                                ),
+                                              )
+                                            ],
+                                          )
                                       ),
                                       Expanded(
                                         child: RaisedButton(
@@ -511,7 +557,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                   if(singleFormKey.currentState.validate()){
                                     setState(() {
                                       singlelist.clear();
-                                      var item = CrawlItem(noInputController.text, urlInputController.text);
+                                      var retrycount = int.parse(retryCountController.value.text);
+                                      var item = CrawlItem(noInputController.text, urlInputController.text, retrycount);
                                       singlelist.add(item);
                                     });
                                     await crawlingSingle();
@@ -562,7 +609,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
                                   if(singleFormKey.currentState.validate()){
                                     setState(() {
                                       singlelist.clear();
-                                      var item = CrawlItem(noInputController.text, urlInputController.text);
+                                      var retrycount = int.parse(retryCountController.value.text);
+                                      var item = CrawlItem(noInputController.text, urlInputController.text, retrycount);
                                       singlelist.add(item);
                                     });
                                     await crawlingSingle();
@@ -639,6 +687,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     print('===== crawling (single) =====');
     if(singlelist == null || singlelist.length == 0){
       print('** no queue');
+      enableAction();
       return;
     }
 
@@ -674,6 +723,7 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     print('===== crawling (multiple) =====');
     if(multiplelist == null || multiplelist.length == 0){
       print('** no queue');
+      enableAction();
       return;
     }
 
@@ -751,11 +801,18 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
         if(File(savefile).existsSync()){
           crawlcountAdding(item);
         }
-        await Util.sleep(500);
+        await Util.sleep(100);
       }
     });
     print('= download end =');
-    await Util.sleep(((10-item.retryCount) * 2) * 1000);
+    var retrycount = int.parse(retryCountController.value.text);
+    var startdelay = int.parse(startDelayController.value.text);
+
+    var remain = retrycount - item.retryCount;
+    remain = remain < 0 ? 0 : remain;
+
+    print('--- delay ${startdelay * 1000 + remain * 1000}');
+    await Util.sleep(startdelay * 1000 + remain * 1000);
   }
 
   Future downloadImage(url, savefile) async {
@@ -866,7 +923,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
     for(var values in table.rows){
       if(values[1] == null || !exp.hasMatch(values[1]))
         continue;
-      var item = CrawlItem(values[0].toString(), values[1]);
+      var retrycount = int.parse(retryCountController.value.text);
+      var item = CrawlItem(values[0].toString(), values[1], retrycount);
 
       setState(() {
         list.add(item);
@@ -982,7 +1040,8 @@ class Util {
   static var rand = Random();
 
   static Future sleep(int t) {
-    var next = t + rand.nextInt(500);
+//    var next = t + rand.nextInt(500);
+    var next = t;
     return new Future.delayed(Duration(milliseconds: next), () => '1');
   }
 
@@ -1021,11 +1080,11 @@ class CrawlItem {
 
   int imageCount = 0;
   int crawlCount = 0;
-  int retryCount = 10;
+  int retryCount = 0;
 
   String state = CrawlState.Ready;
 
-  CrawlItem(this.no, this.url);
+  CrawlItem(this.no, this.url, this.retryCount);
 }
 
 class CrawlState {
