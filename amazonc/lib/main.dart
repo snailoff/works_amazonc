@@ -259,8 +259,8 @@ class _CrawlPageState extends State<CrawlPage> with SingleTickerProviderStateMix
   void initState() {
     urlInputController = TextEditingController();
     noInputController = TextEditingController();
-    startDelayController = TextEditingController(text:'2');
-    retryCountController = TextEditingController(text:'5');
+    startDelayController = TextEditingController(text:'5');
+    retryCountController = TextEditingController(text:'3');
     focusSingleUrl = FocusNode();
 
     refreshTargetList();
